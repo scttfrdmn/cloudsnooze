@@ -8,14 +8,20 @@
   top: 0;
 }
 
-/* Add proper padding to the main content area to prevent overlap with the navbar */
-body {
-  padding-top: 4rem;
+/* Proper spacing for main content */
+.td-main {
+  padding-top: 6rem !important;
 }
 
-/* Ensure content is positioned properly on mobile */
+/* Main heading needs more space */
+.td-main h1:first-of-type {
+  padding-top: 1.5rem;
+  margin-top: 0;
+}
+
+/* Specific spacing for different screen sizes */
 @media (max-width: 768px) {
-  body {
-    padding-top: 3.5rem;
+  .td-main {
+    padding-top: 5rem !important;
   }
 }
