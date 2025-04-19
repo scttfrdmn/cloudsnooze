@@ -3,6 +3,8 @@ package monitor
 import (
 	"fmt"
 	"time"
+	
+	"github.com/scttfrdmn/cloudsnooze/daemon/accelerator"
 )
 
 // SystemMonitor coordinates all monitoring activities
@@ -11,6 +13,7 @@ type SystemMonitor struct {
 	memoryMonitor  *MemoryMonitor
 	networkMonitor *NetworkMonitor
 	diskMonitor    *DiskMonitor
+	inputMonitor   *InputMonitor
 	
 	// Thresholds from configuration
 	cpuThreshold    float64
@@ -18,32 +21,42 @@ type SystemMonitor struct {
 	networkThreshold float64
 	diskThreshold   float64
 	inputThreshold  int
+	gpuThreshold    float64
 	
 	// Tracking data
 	idleSince          *time.Time
 	napTimeMinutes     int
 	lastMetrics        SystemMetrics
 	checkIntervalMs    int
+	
+	// GPU monitoring
+	gpuMonitoringEnabled bool
+	gpuService           *accelerator.GPUService
 }
 
 // NewSystemMonitor creates a new system monitor
-func NewSystemMonitor(cpuThreshold, memoryThreshold, networkThreshold, diskThreshold float64, 
-	inputThreshold, napTimeMinutes, checkIntervalMs int) *SystemMonitor {
+func NewSystemMonitor(cpuThreshold, memoryThreshold, networkThreshold, diskThreshold, gpuThreshold float64, 
+	inputThreshold, napTimeMinutes, checkIntervalMs int, gpuMonitoringEnabled bool) *SystemMonitor {
 	
 	return &SystemMonitor{
 		cpuMonitor:      NewCPUMonitor(),
 		memoryMonitor:   NewMemoryMonitor(),
 		networkMonitor:  NewNetworkMonitor(checkIntervalMs),
 		diskMonitor:     NewDiskMonitor(checkIntervalMs),
+		inputMonitor:    NewInputMonitor(),
 		
 		cpuThreshold:    cpuThreshold,
 		memoryThreshold: memoryThreshold,
 		networkThreshold: networkThreshold,
 		diskThreshold:   diskThreshold,
 		inputThreshold:  inputThreshold,
+		gpuThreshold:    gpuThreshold,
 		
 		napTimeMinutes:   napTimeMinutes,
 		checkIntervalMs:  checkIntervalMs,
+		
+		gpuMonitoringEnabled: gpuMonitoringEnabled,
+		gpuService:           accelerator.NewGPUService(),
 	}
 }
 
@@ -81,8 +94,25 @@ func (m *SystemMonitor) CollectMetrics() (SystemMetrics, error) {
 	}
 	metrics.DiskIOKBps = diskUsage
 	
-	// TODO: Implement input monitoring and GPU monitoring
-	metrics.InputIdleSecs = 0 // Placeholder until implemented
+	// Collect input activity metrics
+	inputIdleSecs, err := m.inputMonitor.GetIdleSeconds()
+	if err != nil {
+		// Just log and continue, don't fail the entire collection
+		fmt.Printf("Warning: Failed to get input metrics: %v\n", err)
+		inputIdleSecs = 0
+	}
+	metrics.InputIdleSecs = inputIdleSecs
+	
+	// Collect GPU metrics if enabled
+	if m.gpuMonitoringEnabled {
+		gpuMetrics, err := m.gpuService.GetAllMetrics()
+		if err != nil {
+			// Just log and continue
+			fmt.Printf("Warning: Failed to get GPU metrics: %v\n", err)
+		} else {
+			metrics.GPUMetrics = gpuMetrics
+		}
+	}
 	
 	// Determine idle status based on all metrics
 	metrics.IdleStatus = false
@@ -128,7 +158,33 @@ func (m *SystemMonitor) CollectMetrics() (SystemMetrics, error) {
 		return metrics, nil
 	}
 	
-	// TODO: Add input and GPU checks here
+	// Check input idle time if threshold is set
+	if m.inputThreshold > 0 && inputIdleSecs < m.inputThreshold {
+		metrics.IdleStatus = false
+		m.idleSince = nil
+		metrics.IdleReason = fmt.Sprintf("Input idle time %d secs below threshold %d secs", inputIdleSecs, m.inputThreshold)
+		m.lastMetrics = metrics
+		return metrics, nil
+	} else if m.inputThreshold > 0 {
+		reasons = append(reasons, fmt.Sprintf("Input idle time %d secs above threshold %d secs", inputIdleSecs, m.inputThreshold))
+	}
+	
+	// Check GPU usage if enabled
+	if m.gpuMonitoringEnabled && len(metrics.GPUMetrics) > 0 {
+		for _, gpu := range metrics.GPUMetrics {
+			if gpu.Utilization > m.gpuThreshold {
+				metrics.IdleStatus = false
+				m.idleSince = nil
+				metrics.IdleReason = fmt.Sprintf("GPU %d (%s) usage %.1f%% above threshold %.1f%%", 
+					gpu.ID, gpu.Name, gpu.Utilization, m.gpuThreshold)
+				m.lastMetrics = metrics
+				return metrics, nil
+			}
+		}
+		
+		// All GPUs are below threshold
+		reasons = append(reasons, fmt.Sprintf("All GPUs below usage threshold %.1f%%", m.gpuThreshold))
+	}
 	
 	// If we got here, all metrics are below thresholds
 	metrics.IdleStatus = true

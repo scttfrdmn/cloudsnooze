@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/scttfrdmn/cloudsnooze/daemon/api"
+	"github.com/scttfrdmn/cloudsnooze/daemon/cloud"
+	"github.com/scttfrdmn/cloudsnooze/daemon/cloud/aws"
 	"github.com/scttfrdmn/cloudsnooze/daemon/monitor"
 )
 
@@ -42,10 +44,25 @@ func main() {
 		config.MemoryThresholdPercent,
 		config.NetworkThresholdKBps,
 		config.DiskIOThresholdKBps,
+		config.GPUThresholdPercent,
 		config.InputIdleThresholdSecs,
 		config.NaptimeMinutes,
 		config.CheckIntervalSeconds*1000,
+		config.GPUMonitoringEnabled,
 	)
+	
+	// Set up AWS cloud provider
+	awsConfig := aws.Config{
+		Region:             config.AWSRegion,
+		EnableTags:         config.EnableInstanceTags,
+		TaggingPrefix:      config.TaggingPrefix,
+		EnableCloudWatch:   config.Logging.EnableCloudWatch,
+		CloudWatchLogGroup: config.Logging.CloudWatchLogGroup,
+	}
+	cloudProvider, err := cloud.CreateProvider(cloud.AWS, awsConfig)
+	if err != nil {
+		log.Printf("Warning: Failed to create cloud provider: %v", err)
+	}
 
 	// Set up API socket server
 	socketServer, err := api.NewSocketServer(*socketPath)
@@ -54,7 +71,7 @@ func main() {
 	}
 
 	// Register command handlers
-	registerCommandHandlers(socketServer, systemMonitor, config)
+	registerCommandHandlers(socketServer, systemMonitor, config, cloudProvider)
 
 	// Start socket server in a goroutine
 	go func() {
@@ -69,7 +86,7 @@ func main() {
 
 	// Start monitoring loop
 	done := make(chan bool)
-	go monitorLoop(systemMonitor, config, done)
+	go monitorLoop(systemMonitor, cloudProvider, config, done)
 
 	// Wait for signal
 	sig := <-sigChan
@@ -123,9 +140,21 @@ func loadConfig(path string) (Config, error) {
 	return config, nil
 }
 
-func monitorLoop(systemMonitor *monitor.SystemMonitor, config Config, done chan bool) {
+func monitorLoop(systemMonitor *monitor.SystemMonitor, cloudProvider cloud.Provider, config Config, done chan bool) {
 	ticker := time.NewTicker(time.Duration(config.CheckIntervalSeconds) * time.Second)
 	defer ticker.Stop()
+
+	// Try to verify permissions at startup
+	if cloudProvider != nil {
+		log.Printf("Verifying cloud provider permissions...")
+		if hasPerms, err := cloudProvider.VerifyPermissions(); err != nil {
+			log.Printf("Warning: Failed to verify cloud provider permissions: %v", err)
+		} else if !hasPerms {
+			log.Printf("Warning: Insufficient permissions to stop instances")
+		} else {
+			log.Printf("Cloud provider permissions verified successfully")
+		}
+	}
 
 	for {
 		select {
@@ -141,19 +170,51 @@ func monitorLoop(systemMonitor *monitor.SystemMonitor, config Config, done chan 
 			shouldSnooze, reason := systemMonitor.ShouldSnooze()
 			if shouldSnooze {
 				log.Printf("Instance should be snoozed: %s", reason)
-				// TODO: Implement actual instance stopping via cloud provider API
 				
-				// For now, we just log that we would stop the instance
-				log.Printf("Would stop instance with reason: %s", reason)
+				// Actually stop the instance via cloud provider
+				if cloudProvider != nil {
+					// Create a snooze event for logging
+					event := &monitor.SnoozeEvent{
+						Timestamp:   time.Now(),
+						Reason:      reason,
+						Metrics:     metrics,
+						NaptimeMins: config.NaptimeMinutes,
+					}
+					
+					// Get instance info if possible
+					instanceInfo, err := cloudProvider.GetInstanceInfo()
+					if err != nil {
+						log.Printf("Warning: Failed to get instance info: %v", err)
+					} else {
+						event.InstanceID = instanceInfo.ID
+						event.InstanceType = instanceInfo.Type
+						event.Region = instanceInfo.Region
+					}
+					
+					// Log the snooze event (ideally this would go to a proper logging system)
+					eventJSON, _ := json.MarshalIndent(event, "", "  ")
+					log.Printf("Snooze event: %s", string(eventJSON))
+					
+					// Stop the instance
+					err = cloudProvider.StopInstance(reason, metrics)
+					if err != nil {
+						log.Printf("Failed to stop instance: %v", err)
+					} else {
+						log.Printf("Successfully initiated instance stop")
+					}
+				} else {
+					log.Printf("No cloud provider available, would stop instance with reason: %s", reason)
+				}
 				
-				// Reset idle state after "stopping" instance
+				// Reset idle state after stopping instance
 				systemMonitor.ResetIdleState()
 			}
 		}
 	}
 }
 
-func registerCommandHandlers(server *api.SocketServer, systemMonitor *monitor.SystemMonitor, config Config) {
+func registerCommandHandlers(server *api.SocketServer, systemMonitor *monitor.SystemMonitor, config Config, cloudProvider cloud.Provider) {
+	
 	// STATUS command
 	server.RegisterHandler("STATUS", func(params map[string]interface{}) (interface{}, error) {
 		metrics := systemMonitor.GetLastMetrics()
@@ -165,12 +226,19 @@ func registerCommandHandlers(server *api.SocketServer, systemMonitor *monitor.Sy
 		
 		shouldSnooze, reason := systemMonitor.ShouldSnooze()
 		
+		// Get instance info if available
+		var instanceInfo *cloud.InstanceInfo
+		if cloudProvider != nil {
+			instanceInfo, _ = cloudProvider.GetInstanceInfo()
+		}
+		
 		return map[string]interface{}{
-			"metrics":      metrics,
-			"idle_since":   idleSinceStr,
+			"metrics":       metrics,
+			"idle_since":    idleSinceStr,
 			"should_snooze": shouldSnooze,
 			"snooze_reason": reason,
-			"version":      version,
+			"version":       version,
+			"instance_info": instanceInfo,
 		}, nil
 	})
 	

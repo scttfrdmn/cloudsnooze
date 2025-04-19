@@ -59,6 +59,12 @@ func (c *StatusCommand) showStatus(client interface{}) error {
 	fmt.Printf("Status: %s\n", "Running")
 	fmt.Printf("Monitoring since: %s\n", time.Now().Format("2006-01-02 15:04:05"))
 	
+	fmt.Println("\nInstance information:")
+	fmt.Printf("  - ID: %s\n", "i-01234567890abcdef")
+	fmt.Printf("  - Type: %s\n", "t3.medium")
+	fmt.Printf("  - Region: %s\n", "us-east-1")
+	fmt.Printf("  - Provider: %s\n", "AWS")
+	
 	fmt.Println("\nCurrent metrics:")
 	fmt.Printf("  - CPU: %.1f%% (threshold: %.1f%%)\n", 5.2, 10.0)
 	fmt.Printf("  - Memory: %.1f%% (threshold: %.1f%%)\n", 22.7, 30.0)
@@ -69,6 +75,7 @@ func (c *StatusCommand) showStatus(client interface{}) error {
 	
 	fmt.Printf("\nSystem idle: %s (%s)\n", "No", "Input activity detected")
 	fmt.Printf("Current naptime: %d of %d minutes\n", 0, 30)
+	fmt.Printf("Will snooze in: %d minutes\n", 30)
 	
 	if c.Watch {
 		fmt.Printf("\nWatch mode: refreshing every %d seconds (press Ctrl+C to exit)\n", c.Interval)
