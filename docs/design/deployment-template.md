@@ -1,53 +1,36 @@
-# CloudSnooze - Deployment Template
+# CloudSnooze Deployment Templates
 
-This document provides templates and instructions for deploying CloudSnooze in various cloud environments.
+This document provides templates and examples for deploying CloudSnooze in various cloud environments.
 
 ## AWS Deployment
-
-### IAM Role Configuration
-
-The following IAM policy allows CloudSnooze to stop instances and tag them:
-
-```json
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": "ec2:StopInstances",
-            "Resource": "arn:aws:ec2:*:*:instance/*",
-            "Condition": {
-                "StringEquals": {"ec2:ResourceID": "${ec2:InstanceID}"}
-            }
-        },
-        {
-            "Effect": "Allow",
-            "Action": "ec2:DescribeInstances",
-            "Resource": "*"
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "ec2:CreateTags",
-                "ec2:DeleteTags"
-            ],
-            "Resource": "arn:aws:ec2:*:*:instance/*",
-            "Condition": {
-                "StringEquals": {"ec2:ResourceID": "${ec2:InstanceID}"}
-            }
-        }
-    ]
-}
-```
 
 ### CloudFormation Template
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'CloudSnooze IAM Role and Instance Profile'
+Description: 'CloudSnooze Deployment'
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t3.medium
+    Description: Instance type for deployment
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: SSH key for instance access
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC for deployment
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet for deployment
+  CloudSnoozeVersion:
+    Type: String
+    Default: 0.1.0
+    Description: CloudSnooze version to deploy
 
 Resources:
-  CloudSnoozeRole:
+  CloudSnoozeInstanceRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -57,266 +40,307 @@ Resources:
             Principal:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
-      Path: /
       ManagedPolicyArns:
-        - !Ref CloudSnoozePolicy
-
-  CloudSnoozePolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      Description: Policy for CloudSnooze to stop instances and manage tags
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Action: ec2:StopInstances
-            Resource: !Sub arn:aws:ec2:*:${AWS::AccountId}:instance/*
-            Condition:
-              StringEquals:
-                ec2:ResourceID: "${ec2:InstanceID}"
-          - Effect: Allow
-            Action: ec2:DescribeInstances
-            Resource: "*"
-          - Effect: Allow
-            Action:
-              - ec2:CreateTags
-              - ec2:DeleteTags
-            Resource: !Sub arn:aws:ec2:*:${AWS::AccountId}:instance/*
-            Condition:
-              StringEquals:
-                ec2:ResourceID: "${ec2:InstanceID}"
-          - Effect: Allow
-            Action:
-              - logs:CreateLogGroup
-              - logs:CreateLogStream
-              - logs:PutLogEvents
-            Resource: !Sub arn:aws:logs:*:${AWS::AccountId}:log-group:CloudSnooze:*
-            Condition:
-              StringEquals:
-                aws:SourceAccount: "${aws:PrincipalAccount}"
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: CloudSnoozeInstancePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:StopInstances
+                  - ec2:DescribeInstances
+                  - ec2:CreateTags
+                  - ec2:DescribeTags
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: 'arn:aws:logs:*:*:log-group:/aws/cloudsnooze/*'
 
   CloudSnoozeInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      Path: /
       Roles:
-        - !Ref CloudSnoozeRole
+        - !Ref CloudSnoozeInstanceRole
+
+  CloudSnoozeSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for CloudSnooze instance
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  CloudSnoozeInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref CloudSnoozeInstanceProfile
+      SubnetId: !Ref SubnetId
+      SecurityGroupIds:
+        - !GetAtt CloudSnoozeSecurityGroup.GroupId
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          # Install CloudSnooze
+          mkdir -p /opt/cloudsnooze
+          cd /opt/cloudsnooze
+          
+          # Install dependencies
+          apt-get update
+          apt-get install -y curl systemd
+          
+          # Download and install CloudSnooze
+          curl -LO https://github.com/scttfrdmn/cloudsnooze/releases/download/v${CloudSnoozeVersion}/cloudsnooze_${CloudSnoozeVersion}_amd64.deb
+          dpkg -i cloudsnooze_${CloudSnoozeVersion}_amd64.deb
+          
+          # Configure CloudSnooze
+          cat > /etc/snooze/snooze.json << 'EOF'
+          {
+            "CPUThresholdPercent": 5.0,
+            "MemoryThresholdPercent": 10.0,
+            "NetworkThresholdKBps": 5.0,
+            "DiskIOThresholdKBps": 10.0,
+            "GPUThresholdPercent": 5.0,
+            "InputIdleThresholdSecs": 1800,
+            "NaptimeMinutes": 60,
+            "CheckIntervalSeconds": 60,
+            "EnableInstanceTags": true,
+            "DetailedInstanceTags": true,
+            "TaggingPrefix": "CloudSnooze",
+            "GPUMonitoringEnabled": true,
+            "AWSRegion": "${AWS::Region}",
+            "Logging": {
+              "EnableCloudWatch": true,
+              "CloudWatchLogGroup": "/aws/cloudsnooze/instance-logs"
+            }
+          }
+          EOF
+          
+          # Start the service
+          systemctl enable snoozed
+          systemctl start snoozed
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-0c55b159cbfafe1f0
+    us-east-2:
+      AMI: ami-05d72852800cbf29e
+    us-west-1:
+      AMI: ami-0f2176987ee50226e
+    us-west-2:
+      AMI: ami-01fee56b22f308154
 
 Outputs:
-  InstanceProfile:
-    Description: Instance profile for EC2 instances to use CloudSnooze
-    Value: !Ref CloudSnoozeInstanceProfile
-    Export:
-      Name: !Sub "${AWS::StackName}-InstanceProfile"
+  InstanceId:
+    Description: Instance ID of the CloudSnooze instance
+    Value: !Ref CloudSnoozeInstance
+  PublicDNS:
+    Description: Public DNS of the CloudSnooze instance
+    Value: !GetAtt CloudSnoozeInstance.PublicDnsName
 ```
 
 ### Terraform Template
 
 ```hcl
-# CloudSnooze IAM Configuration
-
-resource "aws_iam_policy" "cloudsnooze_policy" {
-  name        = "CloudSnoozePolicy"
-  description = "Policy for CloudSnooze to stop instances and manage tags"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = "ec2:StopInstances"
-        Resource = "arn:aws:ec2:*:*:instance/*"
-        Condition = {
-          StringEquals = {
-            "ec2:ResourceID" = "${ec2:InstanceID}"
-          }
-        }
-      },
-      {
-        Effect   = "Allow"
-        Action   = "ec2:DescribeInstances"
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ec2:CreateTags",
-          "ec2:DeleteTags"
-        ]
-        Resource = "arn:aws:ec2:*:*:instance/*"
-        Condition = {
-          StringEquals = {
-            "ec2:ResourceID" = "${ec2:InstanceID}"
-          }
-        }
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = "arn:aws:logs:*:*:log-group:CloudSnooze:*"
-      }
-    ]
-  })
+provider "aws" {
+  region = var.aws_region
 }
 
+variable "aws_region" {
+  default = "us-east-1"
+}
+
+variable "instance_type" {
+  default = "t3.medium"
+}
+
+variable "key_name" {
+  description = "SSH key for instance access"
+}
+
+variable "vpc_id" {
+  description = "VPC for deployment"
+}
+
+variable "subnet_id" {
+  description = "Subnet for deployment"
+}
+
+variable "cloudsnooze_version" {
+  default = "0.1.0"
+  description = "CloudSnooze version to deploy"
+}
+
+# IAM Role and Policy
 resource "aws_iam_role" "cloudsnooze_role" {
-  name = "CloudSnoozeRole"
+  name = "cloudsnooze-instance-role"
   
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
+        Action = "sts:AssumeRole"
         Effect = "Allow"
         Principal = {
           Service = "ec2.amazonaws.com"
         }
-        Action = "sts:AssumeRole"
       }
     ]
   })
 }
 
-resource "aws_iam_role_policy_attachment" "cloudsnooze_attachment" {
-  role       = aws_iam_role.cloudsnooze_role.name
-  policy_arn = aws_iam_policy.cloudsnooze_policy.arn
+resource "aws_iam_role_policy" "cloudsnooze_policy" {
+  name = "cloudsnooze-instance-policy"
+  role = aws_iam_role.cloudsnooze_role.id
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "ec2:StopInstances",
+          "ec2:DescribeInstances",
+          "ec2:CreateTags",
+          "ec2:DescribeTags"
+        ]
+        Effect = "Allow"
+        Resource = "*"
+      },
+      {
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Effect = "Allow"
+        Resource = "arn:aws:logs:*:*:log-group:/aws/cloudsnooze/*"
+      }
+    ]
+  })
 }
 
 resource "aws_iam_instance_profile" "cloudsnooze_profile" {
-  name = "CloudSnoozeProfile"
+  name = "cloudsnooze-instance-profile"
   role = aws_iam_role.cloudsnooze_role.name
 }
 
-# Example EC2 instance with CloudSnooze
-resource "aws_instance" "example" {
-  ami           = "ami-12345678"  # Replace with appropriate AMI
-  instance_type = "t3.micro"
+# Security Group
+resource "aws_security_group" "cloudsnooze_sg" {
+  name        = "cloudsnooze-sg"
+  description = "Security group for CloudSnooze instance"
+  vpc_id      = var.vpc_id
   
-  iam_instance_profile = aws_iam_instance_profile.cloudsnooze_profile.name
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# EC2 Instance
+resource "aws_instance" "cloudsnooze_instance" {
+  ami                    = "ami-0c55b159cbfafe1f0" # Ubuntu 20.04 LTS
+  instance_type          = var.instance_type
+  key_name               = var.key_name
+  subnet_id              = var.subnet_id
+  vpc_security_group_ids = [aws_security_group.cloudsnooze_sg.id]
+  iam_instance_profile   = aws_iam_instance_profile.cloudsnooze_profile.name
   
   user_data = <<-EOF
-#!/bin/bash
-# Install CloudSnooze
-wget https://github.com/scttfrdmn/cloudsnooze/releases/download/v1.0.0/cloudsnooze_1.0.0_amd64.deb
-dpkg -i cloudsnooze_1.0.0_amd64.deb
-
-# Configure and start the service
-systemctl enable snoozed
-systemctl start snoozed
+    #!/bin/bash -xe
+    # Install CloudSnooze
+    mkdir -p /opt/cloudsnooze
+    cd /opt/cloudsnooze
+    
+    # Install dependencies
+    apt-get update
+    apt-get install -y curl systemd
+    
+    # Download and install CloudSnooze
+    curl -LO https://github.com/scttfrdmn/cloudsnooze/releases/download/v${var.cloudsnooze_version}/cloudsnooze_${var.cloudsnooze_version}_amd64.deb
+    dpkg -i cloudsnooze_${var.cloudsnooze_version}_amd64.deb
+    
+    # Configure CloudSnooze
+    cat > /etc/snooze/snooze.json << 'EOF'
+    {
+      "CPUThresholdPercent": 5.0,
+      "MemoryThresholdPercent": 10.0,
+      "NetworkThresholdKBps": 5.0,
+      "DiskIOThresholdKBps": 10.0,
+      "GPUThresholdPercent": 5.0,
+      "InputIdleThresholdSecs": 1800,
+      "NaptimeMinutes": 60,
+      "CheckIntervalSeconds": 60,
+      "EnableInstanceTags": true,
+      "DetailedInstanceTags": true,
+      "TaggingPrefix": "CloudSnooze",
+      "GPUMonitoringEnabled": true,
+      "AWSRegion": "${var.aws_region}",
+      "Logging": {
+        "EnableCloudWatch": true,
+        "CloudWatchLogGroup": "/aws/cloudsnooze/instance-logs"
+      }
+    }
+    EOF
+    
+    # Start the service
+    systemctl enable snoozed
+    systemctl start snoozed
   EOF
   
   tags = {
-    Name = "CloudSnooze-Enabled-Instance"
+    Name = "CloudSnooze-Instance"
   }
 }
-```
 
-### AWS CDK (TypeScript)
-
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import { Construct } from 'constructs';
-
-export class CloudSnoozeStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
-    super(scope, id, props);
-
-    // CloudSnooze IAM Policy
-    const cloudSnoozePolicy = new iam.ManagedPolicy(this, 'CloudSnoozePolicy', {
-      statements: [
-        new iam.PolicyStatement({
-          effect: iam.Effect.ALLOW,
-          actions: ['ec2:StopInstances'],
-          resources: ['arn:aws:ec2:*:*:instance/*'],
-          conditions: {
-            StringEquals: {
-              'ec2:ResourceID': '${ec2:InstanceID}'
-            }
-          }
-        }),
-        new iam.PolicyStatement({
-          effect: iam.Effect.ALLOW,
-          actions: ['ec2:DescribeInstances'],
-          resources: ['*']
-        }),
-        new iam.PolicyStatement({
-          effect: iam.Effect.ALLOW,
-          actions: ['ec2:CreateTags', 'ec2:DeleteTags'],
-          resources: ['arn:aws:ec2:*:*:instance/*'],
-          conditions: {
-            StringEquals: {
-              'ec2:ResourceID': '${ec2:InstanceID}'
-            }
-          }
-        }),
-        new iam.PolicyStatement({
-          effect: iam.Effect.ALLOW,
-          actions: [
-            'logs:CreateLogGroup',
-            'logs:CreateLogStream',
-            'logs:PutLogEvents'
-          ],
-          resources: [`arn:aws:logs:*:${this.account}:log-group:CloudSnooze:*`]
-        })
-      ]
-    });
-
-    // CloudSnooze Role
-    const role = new iam.Role(this, 'CloudSnoozeRole', {
-      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      managedPolicies: [cloudSnoozePolicy]
-    });
-
-    // CloudSnooze Instance Profile
-    const instanceProfile = new iam.CfnInstanceProfile(this, 'CloudSnoozeInstanceProfile', {
-      roles: [role.roleName]
-    });
-
-    // Output the instance profile name
-    new cdk.CfnOutput(this, 'InstanceProfileName', {
-      value: instanceProfile.ref,
-      description: 'Name of the instance profile for EC2 instances'
-    });
-  }
+output "instance_id" {
+  value = aws_instance.cloudsnooze_instance.id
 }
-```
 
-### AWS CLI Commands
-
-```bash
-# Create IAM policy
-aws iam create-policy \
-  --policy-name CloudSnoozePolicy \
-  --policy-document file://cloudsnooze-policy.json
-
-# Create IAM role
-aws iam create-role \
-  --role-name CloudSnoozeRole \
-  --assume-role-policy-document file://ec2-trust-policy.json
-
-# Attach policy to role
-aws iam attach-role-policy \
-  --role-name CloudSnoozeRole \
-  --policy-arn arn:aws:iam::ACCOUNT_ID:policy/CloudSnoozePolicy
-
-# Create instance profile
-aws iam create-instance-profile \
-  --instance-profile-name CloudSnoozeProfile
-
-# Add role to instance profile
-aws iam add-role-to-instance-profile \
-  --instance-profile-name CloudSnoozeProfile \
-  --role-name CloudSnoozeRole
-
-# Associate instance profile with existing instance
-aws ec2 associate-iam-instance-profile \
-  --instance-id i-1234567890abcdef0 \
-  --iam-instance-profile Name=CloudSnoozeProfile
+output "public_dns" {
+  value = aws_instance.cloudsnooze_instance.public_dns
+}
 ```
 
 ## User Data Scripts
@@ -325,42 +349,42 @@ aws ec2 associate-iam-instance-profile \
 
 ```bash
 #!/bin/bash
-# Install CloudSnooze on Amazon Linux 2
+# CloudSnooze installation for Amazon Linux 2
 
 # Install dependencies
 yum update -y
-yum install -y wget
+yum install -y curl tar
 
 # Download and install CloudSnooze
-wget https://github.com/scttfrdmn/cloudsnooze/releases/download/v1.0.0/cloudsnooze-1.0.0-1.x86_64.rpm
-rpm -i cloudsnooze-1.0.0-1.x86_64.rpm
+curl -LO https://github.com/scttfrdmn/cloudsnooze/releases/download/v0.1.0/cloudsnooze-0.1.0-1.x86_64.rpm
+# Use latest version instead:
+# curl -LO https://github.com/scttfrdmn/cloudsnooze/releases/download/latest/cloudsnooze-latest.x86_64.rpm
+rpm -i cloudsnooze-0.1.0-1.x86_64.rpm
 
 # Configure CloudSnooze
 cat > /etc/snooze/snooze.json << 'EOF'
 {
-  "check_interval_seconds": 60,
-  "naptime_minutes": 30,
-  "cpu_threshold_percent": 10.0,
-  "memory_threshold_percent": 30.0,
-  "network_threshold_kbps": 50.0,
-  "disk_io_threshold_kbps": 100.0,
-  "input_idle_threshold_secs": 900,
-  "gpu_monitoring_enabled": false,
-  "aws_region": "us-east-1",
-  "enable_instance_tags": true,
-  "tagging_prefix": "CloudSnooze",
-  "logging": {
-    "log_level": "info",
-    "enable_file_logging": true,
-    "log_file_path": "/var/log/cloudsnooze.log",
-    "enable_syslog": false,
-    "enable_cloudwatch": false
-  },
-  "monitoring_mode": "basic"
+  "CPUThresholdPercent": 5.0,
+  "MemoryThresholdPercent": 10.0,
+  "NetworkThresholdKBps": 5.0,
+  "DiskIOThresholdKBps": 10.0,
+  "GPUThresholdPercent": 5.0,
+  "InputIdleThresholdSecs": 1800,
+  "NaptimeMinutes": 60,
+  "CheckIntervalSeconds": 60,
+  "EnableInstanceTags": true,
+  "DetailedInstanceTags": true,
+  "TaggingPrefix": "CloudSnooze",
+  "GPUMonitoringEnabled": true,
+  "AWSRegion": "us-east-1", 
+  "Logging": {
+    "EnableCloudWatch": true,
+    "CloudWatchLogGroup": "/aws/cloudsnooze/instance-logs"
+  }
 }
 EOF
 
-# Enable and start the service
+# Start the service
 systemctl enable snoozed
 systemctl start snoozed
 ```
@@ -369,42 +393,54 @@ systemctl start snoozed
 
 ```bash
 #!/bin/bash
-# Install CloudSnooze on Ubuntu/Debian
+# CloudSnooze installation for Ubuntu/Debian
 
-# Update and install dependencies
+# Install dependencies
 apt-get update
-apt-get install -y wget
+apt-get install -y curl systemd
 
 # Download and install CloudSnooze
-wget https://github.com/scttfrdmn/cloudsnooze/releases/download/v1.0.0/cloudsnooze_1.0.0_amd64.deb
-dpkg -i cloudsnooze_1.0.0_amd64.deb
+curl -LO https://github.com/scttfrdmn/cloudsnooze/releases/download/v0.1.0/cloudsnooze_0.1.0_amd64.deb
+# Use latest version instead:
+# curl -LO https://github.com/scttfrdmn/cloudsnooze/releases/download/latest/cloudsnooze-latest_amd64.deb
+dpkg -i cloudsnooze_0.1.0_amd64.deb
 
 # Configure CloudSnooze
 cat > /etc/snooze/snooze.json << 'EOF'
 {
-  "check_interval_seconds": 60,
-  "naptime_minutes": 30,
-  "cpu_threshold_percent": 10.0,
-  "memory_threshold_percent": 30.0,
-  "network_threshold_kbps": 50.0,
-  "disk_io_threshold_kbps": 100.0,
-  "input_idle_threshold_secs": 900,
-  "gpu_monitoring_enabled": false,
-  "aws_region": "us-east-1",
-  "enable_instance_tags": true,
-  "tagging_prefix": "CloudSnooze",
-  "logging": {
-    "log_level": "info",
-    "enable_file_logging": true,
-    "log_file_path": "/var/log/cloudsnooze.log",
-    "enable_syslog": false,
-    "enable_cloudwatch": false
-  },
-  "monitoring_mode": "basic"
+  "CPUThresholdPercent": 5.0,
+  "MemoryThresholdPercent": 10.0,
+  "NetworkThresholdKBps": 5.0,
+  "DiskIOThresholdKBps": 10.0,
+  "GPUThresholdPercent": 5.0,
+  "InputIdleThresholdSecs": 1800,
+  "NaptimeMinutes": 60,
+  "CheckIntervalSeconds": 60,
+  "EnableInstanceTags": true,
+  "DetailedInstanceTags": true,
+  "TaggingPrefix": "CloudSnooze",
+  "GPUMonitoringEnabled": true,
+  "AWSRegion": "us-east-1", 
+  "Logging": {
+    "EnableCloudWatch": true,
+    "CloudWatchLogGroup": "/aws/cloudsnooze/instance-logs"
+  }
 }
 EOF
 
-# Enable and start the service
+# Start the service
 systemctl enable snoozed
 systemctl start snoozed
 ```
+
+## Version Information
+
+This deployment template is compatible with CloudSnooze v0.1.0 and uses the versioning scheme documented in the packaging system.
+
+For latest package links, use:
+- DEB: `https://github.com/scttfrdmn/cloudsnooze/releases/download/latest/cloudsnooze-latest_amd64.deb`
+- RPM: `https://github.com/scttfrdmn/cloudsnooze/releases/download/latest/cloudsnooze-latest.x86_64.rpm`
+
+For specific version links, use:
+- DEB: `https://github.com/scttfrdmn/cloudsnooze/releases/download/v0.1.0/cloudsnooze_0.1.0_amd64.deb`
+- RPM: `https://github.com/scttfrdmn/cloudsnooze/releases/download/v0.1.0/cloudsnooze-0.1.0-1.x86_64.rpm`

@@ -11,6 +11,34 @@ CloudSnooze is a tool for automatically stopping idle cloud instances. External 
 3. Gather metrics that led to the stop decision
 4. Possibly restart instances when needed
 
+## Package Installation
+
+CloudSnooze is distributed in several packaging formats for easy integration:
+
+### DEB Packages (Debian, Ubuntu)
+
+```bash
+# Install specific version
+curl -LO https://github.com/scttfrdmn/cloudsnooze/releases/download/v0.1.0/cloudsnooze_0.1.0_amd64.deb
+sudo dpkg -i cloudsnooze_0.1.0_amd64.deb
+
+# Or always use latest version
+curl -LO https://github.com/scttfrdmn/cloudsnooze/releases/download/latest/cloudsnooze-latest_amd64.deb  
+sudo dpkg -i cloudsnooze-latest_amd64.deb
+```
+
+### RPM Packages (RHEL, CentOS, Fedora)
+
+```bash
+# Install specific version
+curl -LO https://github.com/scttfrdmn/cloudsnooze/releases/download/v0.1.0/cloudsnooze-0.1.0-1.x86_64.rpm
+sudo rpm -i cloudsnooze-0.1.0-1.x86_64.rpm
+
+# Or always use latest version
+curl -LO https://github.com/scttfrdmn/cloudsnooze/releases/download/latest/cloudsnooze-latest.x86_64.rpm
+sudo rpm -i cloudsnooze-latest.x86_64.rpm
+```
+
 ## Integration Methods
 
 ### 1. Tag-Based Integration (Recommended)
@@ -226,11 +254,19 @@ func getCloudSnoozeStatus() (map[string]interface{}, error) {
    - Check if CloudSnooze logs show successful tagging.
    - Verify the IAM role has permission to create and modify tags.
 
+## Version Information
+
+CloudSnooze follows semantic versioning (MAJOR.MINOR.PATCH):
+
+* Current version: 0.1.0
+* Latest stable release tag: v0.1.0
+
+For each release, both versioned and `-latest` packages are provided to support both specific versioning and automatically staying updated.
+
 ## Additional Resources
 
 - CloudSnooze Configuration: See `config/snooze.json`
 - API Documentation: See `docs/api/socket.md`
-
-## Version Compatibility
-
-This integration guide is compatible with CloudSnooze v0.1.0 and above.
+- [Restart Logic](restart-logic.md) - How CloudSnooze handles instance restarts
+- [API Reference](api-reference.md) - Complete API documentation
+- [Deployment Templates](../design/deployment-template.md) - AWS deployment examples
