@@ -1,0 +1,23 @@
+{
+  "check_interval_seconds": 60,
+  "naptime_minutes": 30,
+  "cpu_threshold_percent": 10.0,
+  "memory_threshold_percent": 30.0,
+  "network_threshold_kbps": 50.0,
+  "disk_io_threshold_kbps": 100.0,
+  "input_idle_threshold_secs": 900,
+  "gpu_monitoring_enabled": true,
+  "gpu_threshold_percent": 5.0,
+  "aws_region": "us-east-1",
+  "enable_instance_tags": true,
+  "tagging_prefix": "CloudSnooze",
+  "logging": {
+    "log_level": "info",
+    "enable_file_logging": true,
+    "log_file_path": "/var/log/cloudsnooze.log",
+    "enable_syslog": false,
+    "enable_cloudwatch": false,
+    "cloudwatch_log_group": "CloudSnooze"
+  },
+  "monitoring_mode": "basic"
+}

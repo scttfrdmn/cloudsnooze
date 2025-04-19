@@ -1,0 +1,36 @@
+{
+  "name": "snooze-gui",
+  "version": "0.1.0",
+  "description": "CloudSnooze GUI - Automatically stop idle cloud instances",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^22.0.0",
+    "electron-builder": "^23.6.0"
+  },
+  "dependencies": {
+    "chart.js": "^4.0.0",
+    "electron-log": "^4.4.8"
+  },
+  "build": {
+    "appId": "com.yourname.cloudsnooze",
+    "productName": "CloudSnooze",
+    "linux": {
+      "target": ["deb", "rpm"],
+      "category": "Utility"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "target": ["nsis"]
+    }
+  }
+}

@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CloudSnooze</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f5f5f5;
+      color: #333;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    header {
+      background-color: #2c3e50;
+      color: white;
+      padding: 15px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 24px;
+    }
+    .status-badge {
+      background-color: #27ae60;
+      color: white;
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+    .status-badge.inactive {
+      background-color: #e74c3c;
+    }
+    .status-badge.idle {
+      background-color: #f39c12;
+    }
+    .card {
+      background-color: white;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+      padding: 20px;
+    }
+    .card h2 {
+      margin-top: 0;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+      color: #2c3e50;
+    }
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .metric-box {
+      background-color: #f8f9fa;
+      border-radius: 4px;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+    }
+    .metric-name {
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: #34495e;
+    }
+    .metric-value {
+      font-size: 24px;
+      margin-bottom: 5px;
+    }
+    .metric-threshold {
+      color: #7f8c8d;
+      font-size: 14px;
+    }
+    .progress-bar {
+      height: 8px;
+      background-color: #ecf0f1;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 5px;
+    }
+    .progress-fill {
+      height: 100%;
+      background-color: #3498db;
+      transition: width 0.5s ease;
+    }
+    .progress-fill.warning {
+      background-color: #f39c12;
+    }
+    .progress-fill.danger {
+      background-color: #e74c3c;
+    }
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid #ddd;
+      margin-bottom: 20px;
+    }
+    .tab {
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+    .tab.active {
+      border-bottom: 3px solid #3498db;
+      font-weight: bold;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input[type="number"], input[type="text"], select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    button {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:hover {
+      background-color: #2980b9;
+    }
+    .history-item {
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #eee;
+    }
+    .history-date {
+      font-weight: bold;
+      color: #34495e;
+    }
+    .history-reason {
+      color: #7f8c8d;
+    }
+    .chart-container {
+      position: relative;
+      height: 300px;
+      margin-bottom: 20px;
+    }
+    .footer {
+      text-align: center;
+      padding: 20px;
+      color: #7f8c8d;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>CloudSnooze</h1>
+    <div class="status-badge" id="status-badge">Loading...</div>
+  </header>
+  
+  <div class="container">
+    <div class="tabs">
+      <div class="tab active" data-tab="dashboard">Dashboard</div>
+      <div class="tab" data-tab="configuration">Configuration</div>
+      <div class="tab" data-tab="history">History</div>
+    </div>
+    
+    <div class="tab-content active" id="dashboard">
+      <div class="card">
+        <h2>System Status</h2>
+        <p id="status-details">Checking system status...</p>
+        <p id="idle-status"></p>
+      </div>
+      
+      <div class="card">
+        <h2>Current Metrics</h2>
+        <div class="metrics-grid" id="metrics-grid">
+          <!-- Metrics will be populated dynamically -->
+        </div>
+      </div>
+      
+      <div class="card">
+        <h2>Resource Usage Over Time</h2>
+        <div class="chart-container">
+          <canvas id="metrics-chart"></canvas>
+        </div>
+      </div>
+    </div>
+    
+    <div class="tab-content" id="configuration">
+      <div class="card">
+        <h2>Thresholds</h2>
+        <form id="thresholds-form">
+          <div class="form-group">
+            <label for="cpu-threshold">CPU Threshold (%)</label>
+            <input type="number" id="cpu-threshold" min="0" max="100" step="0.1">
+          </div>
+          
+          <div class="form-group">
+            <label for="memory-threshold">Memory Threshold (%)</label>
+            <input type="number" id="memory-threshold" min="0" max="100" step="0.1">
+          </div>
+          
+          <div class="form-group">
+            <label for="network-threshold">Network Threshold (KB/s)</label>
+            <input type="number" id="network-threshold" min="0" step="0.1">
+          </div>
+          
+          <div class="form-group">
+            <label for="disk-threshold">Disk I/O Threshold (KB/s)</label>
+            <input type="number" id="disk-threshold" min="0" step="0.1">
+          </div>
+          
+          <div class="form-group">
+            <label for="input-threshold">Input Idle Threshold (seconds)</label>
+            <input type="number" id="input-threshold" min="0">
+          </div>
+          
+          <div class="form-group">
+            <label for="gpu-threshold">GPU Threshold (%)</label>
+            <input type="number" id="gpu-threshold" min="0" max="100" step="0.1">
+          </div>
+          
+          <button type="submit">Save Thresholds</button>
+        </form>
+      </div>
+      
+      <div class="card">
+        <h2>General Settings</h2>
+        <form id="general-settings-form">
+          <div class="form-group">
+            <label for="naptime">Naptime (minutes)</label>
+            <input type="number" id="naptime" min="1">
+          </div>
+          
+          <div class="form-group">
+            <label for="check-interval">Check Interval (seconds)</label>
+            <input type="number" id="check-interval" min="1">
+          </div>
+          
+          <div class="form-group">
+            <label for="aws-region">AWS Region</label>
+            <select id="aws-region">
+              <option value="us-east-1">US East (N. Virginia)</option>
+              <option value="us-east-2">US East (Ohio)</option>
+              <option value="us-west-1">US West (N. California)</option>
+              <option value="us-west-2">US West (Oregon)</option>
+              <option value="eu-west-1">EU (Ireland)</option>
+              <option value="eu-central-1">EU (Frankfurt)</option>
+              <option value="ap-northeast-1">Asia Pacific (Tokyo)</option>
+              <option value="ap-southeast-1">Asia Pacific (Singapore)</option>
+              <option value="ap-southeast-2">Asia Pacific (Sydney)</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="tagging-prefix">Tagging Prefix</label>
+            <input type="text" id="tagging-prefix">
+          </div>
+          
+          <button type="submit">Save Settings</button>
+        </form>
+      </div>
+    </div>
+    
+    <div class="tab-content" id="history">
+      <div class="card">
+        <h2>Snooze History</h2>
+        <div id="history-list">
+          <p>Loading history...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="footer">
+    CloudSnooze v0.1.0 - Automatically stop idle cloud instances
+  </div>
+  
+  <script>
+    // This will be replaced with proper communication with the Electron main process
+    const { ipcRenderer } = require('electron');
+    
+    // Tab switching
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        // Remove active class from all tabs and content
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        
+        // Add active class to clicked tab and corresponding content
+        tab.classList.add('active');
+        const tabId = tab.getAttribute('data-tab');
+        document.getElementById(tabId).classList.add('active');
+      });
+    });
+    
+    // Request status from main process
+    ipcRenderer.send('get-status');
+    
+    // Handle status updates
+    ipcRenderer.on('status-update', (event, data) => {
+      updateDashboard(data);
+    });
+    
+    // Handle status result
+    ipcRenderer.on('status-result', (event, data) => {
+      if (data.error) {
+        document.getElementById('status-details').textContent = `Error: ${data.error}`;
+        document.getElementById('status-badge').textContent = 'Offline';
+        document.getElementById('status-badge').classList.add('inactive');
+        return;
+      }
+      
+      updateDashboard(data);
+    });
+    
+    // Request configuration
+    ipcRenderer.send('get-config');
+    
+    // Handle configuration result
+    ipcRenderer.on('config-result', (event, data) => {
+      if (data.error) {
+        console.error('Configuration error:', data.error);
+        return;
+      }
+      
+      // Populate configuration forms
+      document.getElementById('cpu-threshold').value = data.cpu_threshold_percent;
+      document.getElementById('memory-threshold').value = data.memory_threshold_percent;
+      document.getElementById('network-threshold').value = data.network_threshold_kbps;
+      document.getElementById('disk-threshold').value = data.disk_io_threshold_kbps;
+      document.getElementById('input-threshold').value = data.input_idle_threshold_secs;
+      document.getElementById('gpu-threshold').value = data.gpu_threshold_percent;
+      document.getElementById('naptime').value = data.naptime_minutes;
+      document.getElementById('check-interval').value = data.check_interval_seconds;
+      document.getElementById('aws-region').value = data.aws_region;
+      document.getElementById('tagging-prefix').value = data.tagging_prefix;
+    });
+    
+    // Handle thresholds form submit
+    document.getElementById('thresholds-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      
+      const params = {
+        cpu_threshold_percent: parseFloat(document.getElementById('cpu-threshold').value),
+        memory_threshold_percent: parseFloat(document.getElementById('memory-threshold').value),
+        network_threshold_kbps: parseFloat(document.getElementById('network-threshold').value),
+        disk_io_threshold_kbps: parseFloat(document.getElementById('disk-threshold').value),
+        input_idle_threshold_secs: parseInt(document.getElementById('input-threshold').value),
+        gpu_threshold_percent: parseFloat(document.getElementById('gpu-threshold').value)
+      };
+      
+      ipcRenderer.send('set-config', params);
+    });
+    
+    // Handle general settings form submit
+    document.getElementById('general-settings-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      
+      const params = {
+        naptime_minutes: parseInt(document.getElementById('naptime').value),
+        check_interval_seconds: parseInt(document.getElementById('check-interval').value),
+        aws_region: document.getElementById('aws-region').value,
+        tagging_prefix: document.getElementById('tagging-prefix').value
+      };
+      
+      ipcRenderer.send('set-config', params);
+    });
+    
+    // Request history
+    ipcRenderer.send('get-history', { limit: 20 });
+    
+    // Handle history result
+    ipcRenderer.on('history-result', (event, data) => {
+      const historyList = document.getElementById('history-list');
+      
+      if (data.error) {
+        historyList.innerHTML = `<p>Error loading history: ${data.error}</p>`;
+        return;
+      }
+      
+      if (!Array.isArray(data) || data.length === 0) {
+        historyList.innerHTML = '<p>No snooze events found</p>';
+        return;
+      }
+      
+      // Clear and populate history list
+      historyList.innerHTML = '';
+      data.forEach(event => {
+        const date = new Date(event.timestamp);
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        item.innerHTML = `
+          <div class="history-date">${date.toLocaleString()}</div>
+          <div class="history-reason">${event.reason}</div>
+        `;
+        historyList.appendChild(item);
+      });
+    });
+    
+    // Function to update the dashboard with status data
+    function updateDashboard(data) {
+      // Update status badge
+      const statusBadge = document.getElementById('status-badge');
+      const idleStatus = document.getElementById('idle-status');
+      const statusDetails = document.getElementById('status-details');
+      
+      if (data.metrics) {
+        // Set status badge
+        if (data.should_snooze) {
+          statusBadge.textContent = 'Will Snooze';
+          statusBadge.className = 'status-badge idle';
+        } else if (data.idle_since) {
+          statusBadge.textContent = 'Idle';
+          statusBadge.className = 'status-badge idle';
+        } else {
+          statusBadge.textContent = 'Active';
+          statusBadge.className = 'status-badge';
+        }
+        
+        // Set status details
+        statusDetails.textContent = data.should_snooze 
+          ? `System will be snoozed soon: ${data.snooze_reason}`
+          : `System is being monitored: ${data.snooze_reason}`;
+        
+        // Set idle status
+        if (data.idle_since) {
+          const idleSince = new Date(data.idle_since);
+          const idleDuration = Math.round((new Date() - idleSince) / 60000); // minutes
+          idleStatus.textContent = `System has been idle for ${idleDuration} minutes.`;
+        } else {
+          idleStatus.textContent = '';
+        }
+        
+        // Update metrics grid
+        const metricsGrid = document.getElementById('metrics-grid');
+        metricsGrid.innerHTML = '';
+        
+        // CPU metric
+        addMetricBox(metricsGrid, 'CPU Usage', 
+          data.metrics.cpu_percent.toFixed(1) + '%', 
+          data.metrics.cpu_percent / 100, 
+          data.metrics.cpu_percent >= 80 ? 'danger' : 
+            data.metrics.cpu_percent >= 50 ? 'warning' : '');
+        
+        // Memory metric
+        addMetricBox(metricsGrid, 'Memory Usage', 
+          data.metrics.memory_percent.toFixed(1) + '%', 
+          data.metrics.memory_percent / 100,
+          data.metrics.memory_percent >= 80 ? 'danger' : 
+            data.metrics.memory_percent >= 50 ? 'warning' : '');
+        
+        // Network metric
+        addMetricBox(metricsGrid, 'Network I/O', 
+          data.metrics.network_kbps.toFixed(1) + ' KB/s', 
+          Math.min(data.metrics.network_kbps / 1000, 1), // Scale for progress bar
+          '');
+        
+        // Disk I/O metric
+        addMetricBox(metricsGrid, 'Disk I/O', 
+          data.metrics.disk_io_kbps.toFixed(1) + ' KB/s', 
+          Math.min(data.metrics.disk_io_kbps / 1000, 1), // Scale for progress bar
+          '');
+        
+        // Input idle metric (if available)
+        if (data.metrics.input_idle_secs !== undefined) {
+          addMetricBox(metricsGrid, 'Input Idle Time', 
+            data.metrics.input_idle_secs + ' seconds', 
+            Math.min(data.metrics.input_idle_secs / 3600, 1), // Scale for progress bar (max 1 hour)
+            '');
+        }
+        
+        // GPU metrics (if available)
+        if (data.metrics.gpu_metrics && data.metrics.gpu_metrics.length > 0) {
+          data.metrics.gpu_metrics.forEach((gpu, index) => {
+            addMetricBox(metricsGrid, `GPU ${index + 1} [${gpu.type}]`, 
+              gpu.utilization.toFixed(1) + '%', 
+              gpu.utilization / 100,
+              gpu.utilization >= 80 ? 'danger' : 
+                gpu.utilization >= 50 ? 'warning' : '');
+          });
+        }
+      } else {
+        statusBadge.textContent = 'Offline';
+        statusBadge.className = 'status-badge inactive';
+        statusDetails.textContent = 'Unable to connect to the daemon. Is the service running?';
+        idleStatus.textContent = '';
+      }
+    }
+    
+    // Helper function to add a metric box to the grid
+    function addMetricBox(container, name, value, percentage, progressClass) {
+      const box = document.createElement('div');
+      box.className = 'metric-box';
+      
+      box.innerHTML = `
+        <div class="metric-name">${name}</div>
+        <div class="metric-value">${value}</div>
+        <div class="progress-bar">
+          <div class="progress-fill ${progressClass}" style="width: ${percentage * 100}%"></div>
+        </div>
+      `;
+      
+      container.appendChild(box);
+    }
+    
+    // Auto-refresh status every 5 seconds
+    setInterval(() => {
+      ipcRenderer.send('get-status');
+    }, 5000);
+  </script>
+</body>
+</html>

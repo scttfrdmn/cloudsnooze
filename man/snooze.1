@@ -1,0 +1,100 @@
+.TH SNOOZE 1 "April 2025" "CloudSnooze 0.1.0" "User Commands"
+.SH NAME
+snooze \- automatically stop idle cloud instances
+.SH SYNOPSIS
+.B snooze
+[\fIOPTIONS\fR] \fICOMMAND\fR [\fIARGS\fR]
+.SH DESCRIPTION
+.B snooze
+is a command-line interface for CloudSnooze, a tool for automatically stopping idle cloud instances to save costs. It allows you to monitor system metrics, configure thresholds, and manage the CloudSnooze daemon.
+.SH OPTIONS
+.TP
+.BR \-h ", " \-\-help
+Show help information and exit.
+.TP
+.BR \-v ", " \-\-version
+Show version information and exit.
+.TP
+.BR \-c ", " \-\-config=\fIFILE\fR
+Specify an alternative configuration file (default: /etc/snooze/snooze.json).
+.TP
+.BR \-\-socket=\fIPATH\fR
+Specify an alternative Unix socket path (default: /var/run/snooze.sock).
+.SH COMMANDS
+.TP
+.B status
+Display the current system status, including metrics and daemon information.
+.TP
+.B config
+View or modify configuration parameters.
+.TP
+.B history
+View the history of instance snooze events.
+.TP
+.B start
+Start the daemon.
+.TP
+.B stop
+Stop the daemon.
+.TP
+.B restart
+Restart the daemon.
+.TP
+.B enable
+Enable automatic startup of the daemon.
+.TP
+.B disable
+Disable automatic startup of the daemon.
+.TP
+.B simulate
+Run a simulation based on specified metrics.
+.TP
+.B tags
+Manage instance tags (AWS-specific).
+.TP
+.B logs
+View and manage daemon logs.
+.TP
+.B help
+Show help information for a specific command.
+.SH EXAMPLES
+.TP
+Show current status:
+.B snooze status
+.TP
+Watch status with automatic refresh:
+.B snooze status --watch --interval=5
+.TP
+List all configuration options:
+.B snooze config list
+.TP
+Set CPU threshold to 15%:
+.B snooze config set cpu-threshold 15.0
+.TP
+View last 20 snooze events:
+.B snooze history --limit=20
+.TP
+Export snooze history to CSV:
+.B snooze history --format=csv --output=history.csv
+.TP
+Test cloud provider permissions:
+.B snooze test-permissions
+.SH FILES
+.TP
+.I /etc/snooze/snooze.json
+Default configuration file.
+.TP
+.I /var/run/snooze.sock
+Unix socket for daemon communication.
+.TP
+.I /var/log/cloudsnooze.log
+Default log file location.
+.TP
+.I /var/lib/snooze/history.json
+History file in basic mode.
+.SH SEE ALSO
+.BR snoozed (8)
+.SH AUTHOR
+Your Name <your.email@example.com>
+.SH BUGS
+Report bugs at https://github.com/yourusername/cloudsnooze/issues

@@ -1,0 +1,30 @@
+[Unit]
+Description=CloudSnooze Daemon
+Documentation=https://github.com/yourusername/cloudsnooze
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/snoozed
+Restart=on-failure
+RestartSec=5
+Type=simple
+User=root
+Group=root
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=snoozed
+
+# Security hardening
+CapabilityBoundingSet=
+ProtectSystem=full
+ProtectHome=yes
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+
+[Install]
+WantedBy=multi-user.target
