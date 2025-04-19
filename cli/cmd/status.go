@@ -64,6 +64,7 @@ func (c *StatusCommand) showStatus(client interface{}) error {
 	fmt.Printf("  - Type: %s\n", "t3.medium")
 	fmt.Printf("  - Region: %s\n", "us-east-1")
 	fmt.Printf("  - Provider: %s\n", "AWS")
+	fmt.Printf("  - Tags: CloudSnooze:Status=Running, CloudSnooze:LastCheck=2023-04-19T12:34:56Z\n")
 	
 	fmt.Println("\nCurrent metrics:")
 	fmt.Printf("  - CPU: %.1f%% (threshold: %.1f%%)\n", 5.2, 10.0)

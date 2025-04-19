@@ -22,6 +22,11 @@ type Config struct {
 	EnableInstanceTags bool   `json:"enable_instance_tags"`
 	TaggingPrefix      string `json:"tagging_prefix"`
 	
+	// Tag-based monitoring for external tools
+	DetailedInstanceTags    bool `json:"detailed_instance_tags"`     // Whether to add detailed tags about the stop reason
+	TagPollingEnabled       bool `json:"tag_polling_enabled"`        // Whether to poll for tags from external systems
+	TagPollingIntervalSecs  int  `json:"tag_polling_interval_secs"`  // How often to poll for tags (in seconds)
+	
 	// Logging settings
 	Logging LoggingConfig `json:"logging"`
 	
@@ -54,6 +59,9 @@ func DefaultConfig() Config {
 		AWSRegion:               "us-east-1",
 		EnableInstanceTags:      true,
 		TaggingPrefix:           "CloudSnooze",
+		DetailedInstanceTags:    true,
+		TagPollingEnabled:       true,
+		TagPollingIntervalSecs:  60,  // 1 minute by default
 		Logging: LoggingConfig{
 			LogLevel:           "info",
 			EnableFileLogging:  true,

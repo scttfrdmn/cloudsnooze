@@ -56,6 +56,9 @@ func main() {
 		Region:             config.AWSRegion,
 		EnableTags:         config.EnableInstanceTags,
 		TaggingPrefix:      config.TaggingPrefix,
+		DetailedTags:       config.DetailedInstanceTags,
+		TagPollingEnabled:  config.TagPollingEnabled,
+		TagPollingInterval: config.TagPollingIntervalSecs,
 		EnableCloudWatch:   config.Logging.EnableCloudWatch,
 		CloudWatchLogGroup: config.Logging.CloudWatchLogGroup,
 	}
@@ -98,6 +101,12 @@ func main() {
 	// Clean up
 	if err := socketServer.Stop(); err != nil {
 		log.Printf("Error stopping socket server: %v", err)
+	}
+	
+	// Stop tag polling if the provider supports it
+	// This is a type assertion to check if our provider is specifically an AWS provider
+	if provider, ok := cloudProvider.(interface{ StopTagPolling() }); ok {
+		provider.StopTagPolling()
 	}
 }
 

@@ -17,6 +17,9 @@ type Provider interface {
 	
 	// TagInstance adds tags to the current instance
 	TagInstance(tags map[string]string) error
+	
+	// GetExternalTags checks for tags from external systems that might control this instance
+	GetExternalTags() (map[string]string, error)
 }
 
 // InstanceInfo contains information about the current cloud instance

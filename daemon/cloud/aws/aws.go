@@ -23,24 +23,37 @@ const (
 
 // Config holds AWS-specific configuration
 type Config struct {
-	Region          string
-	EnableTags      bool
-	TaggingPrefix   string
-	EnableCloudWatch bool
-	CloudWatchLogGroup string
+	Region              string
+	EnableTags          bool
+	TaggingPrefix       string
+	DetailedTags        bool  // Whether to add detailed tags
+	TagPollingEnabled   bool  // Whether to poll for tags
+	TagPollingInterval  int   // How often to poll for tags (in seconds)
+	EnableCloudWatch    bool
+	CloudWatchLogGroup  string
 }
 
 // Provider implements the cloud.Provider interface for AWS
 type Provider struct {
 	config Config
 	instanceInfo *cloud.InstanceInfo
+	// Add a channel for tag polling if needed in the future
+	tagPollingDone chan bool
 }
 
 // NewProvider creates a new AWS cloud provider
 func NewProvider(config Config) *Provider {
-	return &Provider{
+	provider := &Provider{
 		config: config,
+		tagPollingDone: make(chan bool),
 	}
+	
+	// Start tag polling if enabled
+	if config.TagPollingEnabled {
+		go provider.startTagPolling()
+	}
+	
+	return provider
 }
 
 // VerifyPermissions checks if the daemon has sufficient permissions to stop instances
@@ -119,11 +132,40 @@ func (p *Provider) StopInstance(reason string, metrics monitor.SystemMetrics) er
 
 	// Add tags if enabled
 	if p.config.EnableTags {
+		// Base tags that are always added
 		tags := map[string]string{
-			fmt.Sprintf("%s:Reason", p.config.TaggingPrefix): reason,
-			fmt.Sprintf("%s:Timestamp", p.config.TaggingPrefix): time.Now().Format(time.RFC3339),
-			fmt.Sprintf("%s:CPUPercent", p.config.TaggingPrefix): fmt.Sprintf("%.2f", metrics.CPUPercent),
-			fmt.Sprintf("%s:MemoryPercent", p.config.TaggingPrefix): fmt.Sprintf("%.2f", metrics.MemoryPercent),
+			fmt.Sprintf("%s:StopTimestamp", p.config.TaggingPrefix): time.Now().Format(time.RFC3339),
+			fmt.Sprintf("%s:StopReason", p.config.TaggingPrefix): reason,
+			fmt.Sprintf("%s:Status", p.config.TaggingPrefix): "Stopped",
+		}
+		
+		// Add detailed tags if enabled
+		if p.config.DetailedTags {
+			// Add system metrics
+			tags[fmt.Sprintf("%s:CPUPercent", p.config.TaggingPrefix)] = fmt.Sprintf("%.2f", metrics.CPUPercent)
+			tags[fmt.Sprintf("%s:MemoryPercent", p.config.TaggingPrefix)] = fmt.Sprintf("%.2f", metrics.MemoryPercent)
+			tags[fmt.Sprintf("%s:NetworkKBps", p.config.TaggingPrefix)] = fmt.Sprintf("%.2f", metrics.NetworkKBps)
+			tags[fmt.Sprintf("%s:DiskIOKBps", p.config.TaggingPrefix)] = fmt.Sprintf("%.2f", metrics.DiskIOKBps)
+			tags[fmt.Sprintf("%s:InputIdleSecs", p.config.TaggingPrefix)] = fmt.Sprintf("%d", metrics.InputIdleSecs)
+			
+			// Add GPU metrics if available
+			if len(metrics.GPUMetrics) > 0 {
+				// Summarize GPU metrics - average utilization of all GPUs
+				var totalGPUUtil float64
+				for _, gpu := range metrics.GPUMetrics {
+					totalGPUUtil += gpu.Utilization
+				}
+				avgGPUUtil := totalGPUUtil / float64(len(metrics.GPUMetrics))
+				tags[fmt.Sprintf("%s:GPUPercent", p.config.TaggingPrefix)] = fmt.Sprintf("%.2f", avgGPUUtil)
+				tags[fmt.Sprintf("%s:GPUCount", p.config.TaggingPrefix)] = fmt.Sprintf("%d", len(metrics.GPUMetrics))
+			}
+			
+			// System information
+			tags[fmt.Sprintf("%s:NaptimeMinutes", p.config.TaggingPrefix)] = fmt.Sprintf("%d", p.config.TagPollingInterval/60)
+			// This is a placeholder since we don't have this info in the Provider struct
+			// In a real implementation, this would come from the config
+			tags[fmt.Sprintf("%s:InstanceType", p.config.TaggingPrefix)] = instanceInfo.Type
+			tags[fmt.Sprintf("%s:Region", p.config.TaggingPrefix)] = instanceInfo.Region
 		}
 		
 		// Tag the instance before stopping it
@@ -156,6 +198,59 @@ func (p *Provider) TagInstance(tags map[string]string) error {
 	}
 
 	return nil
+}
+
+// GetExternalTags checks for tags from external systems that might control this instance
+func (p *Provider) GetExternalTags() (map[string]string, error) {
+	instanceInfo, err := p.GetInstanceInfo()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get instance info: %v", err)
+	}
+
+	// TODO: Implement actual tag retrieval using AWS SDK
+	// For now, return empty tags
+	fmt.Printf("Would check for external tags on instance %s\n", instanceInfo.ID)
+	
+	// In a real implementation, this would call DescribeTags API
+	// and filter for tags with external tool prefixes
+	
+	return make(map[string]string), nil
+}
+
+// startTagPolling starts a goroutine to poll for external tags
+func (p *Provider) startTagPolling() {
+	ticker := time.NewTicker(time.Duration(p.config.TagPollingInterval) * time.Second)
+	defer ticker.Stop()
+	
+	fmt.Printf("Starting tag polling every %d seconds\n", p.config.TagPollingInterval)
+	
+	for {
+		select {
+		case <-p.tagPollingDone:
+			fmt.Println("Stopping tag polling")
+			return
+		case <-ticker.C:
+			tags, err := p.GetExternalTags()
+			if err != nil {
+				fmt.Printf("Error polling for tags: %v\n", err)
+				continue
+			}
+			
+			// Process external tags
+			if len(tags) > 0 {
+				fmt.Printf("Found %d external tags\n", len(tags))
+				// Handle commands from external systems
+				// This could include wake-up commands, status changes, etc.
+			}
+		}
+	}
+}
+
+// StopTagPolling stops the tag polling goroutine
+func (p *Provider) StopTagPolling() {
+	if p.config.TagPollingEnabled {
+		p.tagPollingDone <- true
+	}
 }
 
 // getIMDSv2Token gets a token for IMDSv2 requests
