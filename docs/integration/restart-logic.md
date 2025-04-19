@@ -2,6 +2,10 @@
 
 This document provides detailed guidance on implementing restart logic for instances that have been stopped by CloudSnooze.
 
+## New Restart Capability
+
+CloudSnooze now supports explicit restart authorization for external tools through additional tags. When an instance is stopped, CloudSnooze can be configured to tag it with a `RestartAllowed` flag and optionally specify which external service IDs are allowed to perform restarts.
+
 ## Overview
 
 While CloudSnooze focuses on stopping idle instances, external tools like provisioners may need to implement logic to restart these instances when:
@@ -17,7 +21,7 @@ While CloudSnooze focuses on stopping idle instances, external tools like provis
 The simplest pattern where instances are restarted when explicitly requested:
 
 ```
-User/Service Request → Check if CloudSnooze-stopped → Restart → Update Tags
+User/Service Request → Check if CloudSnooze-stopped → Verify restart authorization → Restart → Update Tags
 ```
 
 #### Example Implementation (AWS)
@@ -25,7 +29,7 @@ User/Service Request → Check if CloudSnooze-stopped → Restart → Update Tag
 ```python
 import boto3
 
-def restart_cloudsnooze_instance(instance_id, tag_prefix='CloudSnooze'):
+def restart_cloudsnooze_instance(instance_id, service_id, tag_prefix='CloudSnooze'):
     ec2 = boto3.client('ec2')
     
     # Check if instance was stopped by CloudSnooze
@@ -39,6 +43,32 @@ def restart_cloudsnooze_instance(instance_id, tag_prefix='CloudSnooze'):
     
     if not response['Tags']:
         return False, "Instance not stopped by CloudSnooze"
+        
+    # Check if restart is allowed
+    restart_allowed_response = ec2.describe_tags(
+        Filters=[
+            {'Name': 'resource-id', 'Values': [instance_id]},
+            {'Name': 'key', 'Values': [f'{tag_prefix}:RestartAllowed']},
+            {'Name': 'value', 'Values': ['true']}
+        ]
+    )
+    
+    if not restart_allowed_response['Tags']:
+        return False, "Restart not allowed for this instance"
+        
+    # Check if specific restarters are defined
+    allowed_restarters_response = ec2.describe_tags(
+        Filters=[
+            {'Name': 'resource-id', 'Values': [instance_id]},
+            {'Name': 'key', 'Values': [f'{tag_prefix}:AllowedRestarters']}
+        ]
+    )
+    
+    # If specific restarters are defined, check if this service is allowed
+    if allowed_restarters_response['Tags']:
+        allowed_restarters = allowed_restarters_response['Tags'][0]['Value'].split(',')
+        if service_id not in allowed_restarters:
+            return False, f"Service {service_id} not authorized to restart this instance"
     
     # Start the instance
     try:
@@ -50,7 +80,8 @@ def restart_cloudsnooze_instance(instance_id, tag_prefix='CloudSnooze'):
             Tags=[
                 {'Key': f'{tag_prefix}:Status', 'Value': 'Running'},
                 {'Key': f'{tag_prefix}:RestartTimestamp', 'Value': datetime.now().isoformat()},
-                {'Key': f'{tag_prefix}:RestartReason', 'Value': 'User requested restart'}
+                {'Key': f'{tag_prefix}:RestartReason', 'Value': 'User requested restart'},
+                {'Key': f'{tag_prefix}:RestartedBy', 'Value': service_id}
             ]
         )
         
@@ -132,9 +163,21 @@ To ensure proper coordination with CloudSnooze, external tools should:
 
 ### Tag Schema for Restarts
 
+### Tags Set by CloudSnooze
+
 | Tag | Description | Example |
-|-----|-------------|---------|
-| `CloudSnooze:Status` | Current status | `Running` |
+|-----|-------------|----------|
+| `CloudSnooze:Status` | Current status | `Stopped` |
+| `CloudSnooze:StopTimestamp` | When the instance was stopped | `2023-04-19T15:30:00Z` |
+| `CloudSnooze:StopReason` | Why the instance was stopped | `System idle for 30 minutes` |
+| `CloudSnooze:RestartAllowed` | Whether external tools can restart | `true` |
+| `CloudSnooze:AllowedRestarters` | Comma-separated list of service IDs allowed to restart | `UserPortal,JobScheduler` |
+
+### Tags Set by External Tools
+
+| Tag | Description | Example |
+|-----|-------------|----------|
+| `CloudSnooze:Status` | Current status (updated) | `Running` |
 | `CloudSnooze:RestartTimestamp` | When the instance was restarted | `2023-04-19T15:30:00Z` |
 | `CloudSnooze:RestartReason` | Why the instance was restarted | `User login` or `Scheduled job` |
 | `CloudSnooze:ExpectedUsageDuration` | How long the instance is expected to be needed | `120` (minutes) |
@@ -158,24 +201,29 @@ Running → Idle → Stopped by CloudSnooze → Restarted by External Tool → R
 
 ## Best Practices
 
-1. **Respect Idle Detection**:
+1. **Respect Authorization Boundaries**:
+   - Only attempt to restart instances where `RestartAllowed` is set to `true`
+   - Verify your service ID is in the `AllowedRestarters` list if specified
+   - Log authorization failures for security auditing
+
+2. **Respect Idle Detection**:
    - Don't disable CloudSnooze when restarting instances
    - Allow the natural idle detection to work
 
-2. **Throttle Restarts**:
+3. **Throttle Restarts**:
    - Implement cooldown periods to prevent rapid stop/start cycles
    - Consider minimum runtime enforcements
 
-3. **Track Effectiveness**:
+4. **Track Effectiveness**:
    - Log when an instance is restarted
    - Track how long it remains active
    - Analyze if the restart was necessary
 
-4. **User Communication**:
+5. **User Communication**:
    - Inform users when an instance is restarted
    - Provide context about when it might be stopped again
 
-5. **Optimize Cold Start**:
+6. **Optimize Cold Start**:
    - For instances that take time to become fully useful after restart
    - Consider warming caches or preloading data
 

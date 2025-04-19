@@ -31,6 +31,8 @@ type Config struct {
 	TagPollingInterval  int   // How often to poll for tags (in seconds)
 	EnableCloudWatch    bool
 	CloudWatchLogGroup  string
+	EnableRestartFlag   bool  // Whether to add RestartAllowed flag
+	AllowedRestarterIDs []string // List of service IDs allowed to restart instances
 }
 
 // Provider implements the cloud.Provider interface for AWS
@@ -137,6 +139,16 @@ func (p *Provider) StopInstance(reason string, metrics monitor.SystemMetrics) er
 			fmt.Sprintf("%s:StopTimestamp", p.config.TaggingPrefix): time.Now().Format(time.RFC3339),
 			fmt.Sprintf("%s:StopReason", p.config.TaggingPrefix): reason,
 			fmt.Sprintf("%s:Status", p.config.TaggingPrefix): "Stopped",
+		}
+		
+		// Add restart capability if enabled
+		if p.config.EnableRestartFlag {
+			tags[fmt.Sprintf("%s:RestartAllowed", p.config.TaggingPrefix)] = "true"
+			
+			// Add allowed restarter IDs if configured
+			if len(p.config.AllowedRestarterIDs) > 0 {
+				tags[fmt.Sprintf("%s:AllowedRestarters", p.config.TaggingPrefix)] = strings.Join(p.config.AllowedRestarterIDs, ",")
+			}
 		}
 		
 		// Add detailed tags if enabled

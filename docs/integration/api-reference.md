@@ -105,6 +105,8 @@ Retrieves the current configuration.
   "detailed_instance_tags": true,
   "tag_polling_enabled": true,
   "tag_polling_interval_secs": 60,
+  "enable_restart_flag": true,
+  "allowed_restarter_ids": ["UserPortal", "JobScheduler"],
   "logging": {
     "log_level": "info",
     "enable_file_logging": true,
@@ -174,6 +176,8 @@ All CloudSnooze tags are prefixed with the configured prefix (default: `CloudSno
 | `CloudSnooze:Status` | Current status | `Running` or `Stopped` |
 | `CloudSnooze:StopTimestamp` | When the instance was stopped | `2023-04-19T14:23:45Z` |
 | `CloudSnooze:StopReason` | Why the instance was stopped | `System idle for 30 minutes` |
+| `CloudSnooze:RestartAllowed` | Whether external tools can restart | `true` |
+| `CloudSnooze:AllowedRestarters` | Comma-separated list of service IDs allowed to restart | `UserPortal,JobScheduler` |
 
 ### Extended Tags
 
@@ -198,11 +202,16 @@ When detailed tagging is enabled, additional tags provide metrics information:
    - `CloudSnooze:Status` = `Stopped`
    - `CloudSnooze:StopTimestamp` added
    - `CloudSnooze:StopReason` added
+   - `CloudSnooze:RestartAllowed` added (if enabled)
+   - `CloudSnooze:AllowedRestarters` added (if configured)
    - Detailed metrics tags added (if enabled)
 
 3. **Instance Restarted by External Tool**:
+   - External tool should verify it's in the `AllowedRestarters` list (if specified)
    - External tool should update `CloudSnooze:Status` to `Running`
-   - External tool may add its own tags
+   - External tool should add `CloudSnooze:RestartTimestamp`
+   - External tool should add `CloudSnooze:RestartReason`
+   - External tool should add `CloudSnooze:RestartedBy` with its service ID
 
 ## Programming Examples
 
@@ -294,6 +303,7 @@ func main() {
 
 ```python
 import boto3
+from datetime import datetime
 
 def get_cloudsnooze_status(instance_id, tag_prefix='CloudSnooze'):
     """Get CloudSnooze status for an instance from its tags."""
@@ -329,10 +339,31 @@ def instance_was_stopped_by_cloudsnooze(instance_id, tag_prefix='CloudSnooze'):
         'StopReason' in status
     )
 
-def restart_cloudsnooze_instance(instance_id, tag_prefix='CloudSnooze'):
+def can_restart_instance(instance_id, service_id, tag_prefix='CloudSnooze'):
+    """Check if this service is allowed to restart the instance."""
+    status = get_cloudsnooze_status(instance_id, tag_prefix)
+    
+    # Check if restart is allowed at all
+    if status.get('RestartAllowed') != 'true':
+        return False
+        
+    # If no specific restarters are defined, any service can restart
+    allowed_restarters = status.get('AllowedRestarters', '')
+    if not allowed_restarters:
+        return True
+        
+    # Check if our service ID is in the allowed list
+    restarter_list = [r.strip() for r in allowed_restarters.split(',')]
+    return service_id in restarter_list
+
+def restart_cloudsnooze_instance(instance_id, service_id, reason='Manual restart', tag_prefix='CloudSnooze'):
     """Restart an instance that was stopped by CloudSnooze."""
     if not instance_was_stopped_by_cloudsnooze(instance_id, tag_prefix):
         return False, "Instance was not stopped by CloudSnooze"
+        
+    # Check if this service is allowed to restart the instance
+    if not can_restart_instance(instance_id, service_id, tag_prefix):
+        return False, "This service is not authorized to restart this instance"
     
     ec2 = boto3.client('ec2')
     
@@ -346,7 +377,10 @@ def restart_cloudsnooze_instance(instance_id, tag_prefix='CloudSnooze'):
             Tags=[
                 {'Key': f'{tag_prefix}:Status', 'Value': 'Running'},
                 {'Key': f'{tag_prefix}:RestartTimestamp', 'Value': datetime.now().isoformat()},
-                {'Key': f'{tag_prefix}:RestartReason', 'Value': 'Manual restart by API'}
+                {'Key': f'{tag_prefix}:RestartReason', 'Value': reason},
+                {'Key': f'{tag_prefix}:RestartedBy', 'Value': service_id},
+                # Optional: Set expected usage duration if known
+                # {'Key': f'{tag_prefix}:ExpectedUsageDuration', 'Value': '120'}
             ]
         )
         
