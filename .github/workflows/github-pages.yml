@@ -30,9 +30,13 @@ jobs:
           # Skip creating files since they're already in the repo
           echo "Hugo site structure already exists in repository"
           
+          # Create themes directory
+          mkdir -p hugo/themes
+          
           # Initialize hugo modules
-          cd hugo && hugo mod init github.com/scttfrdmn/cloudsnooze/hugo || true
-          cd hugo && hugo mod get github.com/google/docsy
+          cd hugo
+          hugo mod init github.com/scttfrdmn/cloudsnooze/hugo || true
+          hugo mod get github.com/google/docsy
 
       - name: Build
         run: cd hugo && hugo --minify
