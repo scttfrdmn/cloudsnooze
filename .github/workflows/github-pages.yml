@@ -27,33 +27,12 @@ jobs:
 
       - name: Setup Hugo site
         run: |
-          # Create Hugo site structure if it doesn't exist
-          if [ ! -d "hugo" ]; then
-            mkdir -p hugo/content hugo/static hugo/layouts
-            
-            # Copy docs content
-            cp -r docs/* hugo/content/
-            cp README.md hugo/content/_index.md
-            
-            # Create config file
-            cat > hugo/config.toml << EOF
-            baseURL = 'https://scttfrdmn.github.io/cloudsnooze/'
-            languageCode = 'en-us'
-            title = 'CloudSnooze'
-            theme = 'docsy'
-            
-            [params]
-              description = 'Automatically stop idle cloud instances to save costs'
-              github_repo = 'https://github.com/scttfrdmn/cloudsnooze'
-            
-            [module]
-              [[module.imports]]
-                path = 'github.com/google/docsy'
-            EOF
-            
-            # Initialize hugo modules
-            cd hugo && hugo mod init github.com/scttfrdmn/cloudsnooze/hugo && hugo mod get github.com/google/docsy
-          fi
+          # Skip creating files since they're already in the repo
+          echo "Hugo site structure already exists in repository"
+          
+          # Initialize hugo modules
+          cd hugo && hugo mod init github.com/scttfrdmn/cloudsnooze/hugo || true
+          cd hugo && hugo mod get github.com/google/docsy
 
       - name: Build
         run: cd hugo && hugo --minify
