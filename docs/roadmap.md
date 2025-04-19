@@ -90,6 +90,14 @@ This document outlines the planned development roadmap for CloudSnooze. The road
 - Instance right-sizing recommendations
 - Integration with cost management tools
 - Mobile app for remote monitoring and control
+- REST API for third-party integrations
+- Webhook notifications for important events
+- Team collaboration with permission levels
+- Machine learning for predictive idle detection
+- Infrastructure as Code integration (Terraform, CloudFormation)
+- Tagged instance groups with different policies
+- Instance resume functionality
+- Cost analytics dashboard
 
 ## Contributing
 
