@@ -33,13 +33,22 @@ jobs:
           # Create themes directory
           mkdir -p hugo/themes
           
+          # Clone Docsy theme directly into the themes directory
+          git clone --depth 1 https://github.com/google/docsy.git hugo/themes/docsy
+          
           # Initialize hugo modules
           cd hugo
           hugo mod init github.com/scttfrdmn/cloudsnooze/hugo || true
-          hugo mod get github.com/google/docsy
 
       - name: Build
-        run: cd hugo && hugo --minify
+        run: |
+          # Install Docsy dependencies
+          cd hugo/themes/docsy
+          npm install
+          
+          # Build the site
+          cd ../../
+          hugo --minify
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3

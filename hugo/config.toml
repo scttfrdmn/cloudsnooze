@@ -22,9 +22,7 @@ theme = 'docsy'
     weight = 50
     url = "https://github.com/scttfrdmn/cloudsnooze"
 
-[module]
-  [[module.imports]]
-    path = 'github.com/google/docsy'
+# Using theme directly from themes directory, no module imports needed
 
 [markup]
   [markup.highlight]
