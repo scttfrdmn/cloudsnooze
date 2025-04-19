@@ -50,11 +50,24 @@ jobs:
 
       - name: Build
         run: |
-          # Install PostCSS for Docsy
-          npm install -g postcss-cli autoprefixer
+          # Install PostCSS for Docsy (locally in the theme directory)
+          cd hugo/themes/docsy
+          npm install
+          cd ../../..
+          
+          # Install global dependencies
+          npm install -g postcss-cli
+          
+          # Create a package.json in the hugo directory if it doesn't exist
+          if [ ! -f hugo/package.json ]; then
+            echo '{"devDependencies":{"autoprefixer":"^10.4.14","postcss":"^8.4.21","postcss-cli":"^10.1.0"}}' > hugo/package.json
+          fi
+          
+          # Install dependencies in the hugo directory
+          cd hugo
+          npm install
           
           # Build the site
-          cd hugo
           hugo --minify
 
       - name: Deploy
