@@ -1,0 +1,66 @@
+name: GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true  # Fetch Hugo themes (true OR recursive)
+          fetch-depth: 0    # Fetch all history for .GitInfo and .Lastmod
+
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v2
+        with:
+          hugo-version: '0.123.4'
+          extended: true
+
+      - name: Setup Hugo site
+        run: |
+          # Create Hugo site structure if it doesn't exist
+          if [ ! -d "hugo" ]; then
+            mkdir -p hugo/content hugo/static hugo/layouts
+            
+            # Copy docs content
+            cp -r docs/* hugo/content/
+            cp README.md hugo/content/_index.md
+            
+            # Create config file
+            cat > hugo/config.toml << EOF
+            baseURL = 'https://scttfrdmn.github.io/cloudsnooze/'
+            languageCode = 'en-us'
+            title = 'CloudSnooze'
+            theme = 'docsy'
+            
+            [params]
+              description = 'Automatically stop idle cloud instances to save costs'
+              github_repo = 'https://github.com/scttfrdmn/cloudsnooze'
+            
+            [module]
+              [[module.imports]]
+                path = 'github.com/google/docsy'
+            EOF
+            
+            # Initialize hugo modules
+            cd hugo && hugo mod init github.com/scttfrdmn/cloudsnooze/hugo && hugo mod get github.com/google/docsy
+          fi
+
+      - name: Build
+        run: cd hugo && hugo --minify
+
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+        if: github.ref == 'refs/heads/main'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./hugo/public

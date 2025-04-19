@@ -1,0 +1,73 @@
+---
+title: "CloudSnooze"
+linkTitle: "Home"
+---
+
+# CloudSnooze
+
+CloudSnooze is a tool for automatically stopping idle cloud instances to save costs. The system monitors various system metrics (CPU, memory, network, disk I/O, user activity, GPU usage) and stops instances when they remain below specified thresholds for a defined period.
+
+## Key Components
+
+1. **Daemon (`snoozed`)**: A Go service that:
+   - Monitors system resources
+   - Verifies cloud provider permissions
+   - Tags instances when stopping (optional)
+   - Logs snooze events
+   - Stops instances via cloud provider APIs
+
+2. **CLI tool (`snooze`)**: A command-line interface for:
+   - Viewing system status
+   - Configuring thresholds and options
+   - Managing the daemon
+   - Viewing snooze history
+
+3. **GUI application (`snooze-gui`)**: An Electron-based interface for:
+   - Visual monitoring of system metrics
+   - Configuration management
+   - Historical data visualization
+
+## Project Structure
+
+```
+cloudsnooze/
+├── daemon/                  # Go daemon code
+│   ├── main.go
+│   ├── monitor/             # Monitoring modules
+│   ├── accelerator/         # GPU monitoring
+│   └── api/                 # Socket API
+├── cli/                     # Go CLI code
+│   ├── main.go
+│   └── cmd/                 # CLI commands
+├── ui/                      # Electron GUI
+│   ├── main.js              # Electron main process
+│   ├── index.html           # GUI interface
+│   └── package.json         # Dependencies
+├── packaging/               # Package building
+│   ├── deb/                 # Debian packaging
+│   └── rpm/                 # RPM packaging
+├── man/                     # Man pages
+├── systemd/                 # Systemd service files
+├── config/                  # Default configurations
+├── docs/                    # Documentation
+├── .github/workflows/       # GitHub Actions
+└── scripts/                 # Build scripts
+```
+
+## Features
+
+- Multi-metric monitoring (CPU, memory, network, disk, GPU, user input)
+- Support for multiple cloud providers (currently AWS)
+- Detailed instance tagging
+- Restart capability for external tools
+- Low resource utilization
+- Cross-platform support (x86_64 and ARM64)
+
+## Documentation
+
+For more detailed information, please check:
+
+- [Design Documentation](/docs/design/)
+- [Integration Guide](/docs/integration/)
+- [Building and Packaging](/docs/building/)
+- [Project Roadmap](/docs/roadmap)

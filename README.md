@@ -15,7 +15,8 @@
   <a href="#quick-start">Quick Start</a> •
   <a href="#documentation">Documentation</a> •
   <a href="#building-from-source">Building</a> •
-  <a href="#license">License</a>
+  <a href="#license">License</a> •
+  <a href="https://scttfrdmn.github.io/cloudsnooze/">Website</a>
 </p>
 
 ## Features
@@ -103,13 +104,14 @@ After installation, CloudSnooze runs with default settings that work for most sc
 
 ## Documentation
 
-- [Overview](docs/overview.md) - Project overview and architecture
-- [Data Model](docs/data-model.md) - Core data structures
-- [Command Structure](docs/command-structure.md) - CLI commands and usage
-- [Deployment Templates](docs/deployment-template.md) - CloudFormation, Terraform, etc.
-- [IAM Configuration Guide](docs/iam-policy-guide.md) - AWS permissions setup
-- [User Guide](docs/user-guide.md) - Detailed usage instructions
-- [Development Guide](docs/development-guide.md) - Information for contributors
+- [Overview](docs/design/overview.md) - Project overview and architecture
+- [Data Model](docs/design/data-model.md) - Core data structures
+- [Command Structure](docs/design/command-structure.md) - CLI commands and usage
+- [Deployment Templates](docs/design/deployment-template.md) - CloudFormation, Terraform, etc.
+- [Integration Guide](docs/integration/README.md) - API reference and integration guide
+- [Building and Packaging](docs/building/packaging.md) - Package building instructions
+
+**For full documentation, visit our [documentation website](https://scttfrdmn.github.io/cloudsnooze/docs/).**
 
 ## Building from Source
 
