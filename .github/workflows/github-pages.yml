@@ -30,11 +30,19 @@ jobs:
           # Skip creating files since they're already in the repo
           echo "Hugo site structure already exists in repository"
           
-          # Create themes directory
+          # Create themes directory and clone necessary dependencies
           mkdir -p hugo/themes
           
           # Clone Docsy theme directly into the themes directory with specific version
           git clone --depth 1 --branch v0.8.0 https://github.com/google/docsy.git hugo/themes/docsy
+          
+          # Clone Font-Awesome directly
+          mkdir -p hugo/themes/github.com/FortAwesome
+          git clone --depth 1 https://github.com/FortAwesome/Font-Awesome.git hugo/themes/github.com/FortAwesome/Font-Awesome
+          
+          # Clone Bootstrap directly
+          mkdir -p hugo/themes/github.com/twbs
+          git clone --depth 1 https://github.com/twbs/bootstrap.git hugo/themes/github.com/twbs/bootstrap
           
           # Initialize hugo modules
           cd hugo
