@@ -1,4 +1,4 @@
-baseURL = 'https://scttfrdmn.github.io/cloudsnooze/'
+baseURL = 'https://cloudsnooze.io/'
 languageCode = 'en-us'
 title = 'CloudSnooze'
 theme = 'docsy'
