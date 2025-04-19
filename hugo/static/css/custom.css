@@ -1,0 +1,21 @@
+/* Custom CSS for CloudSnooze site */
+
+/* Fix navbar positioning issue */
+.td-navbar {
+  position: fixed;
+  width: 100%;
+  z-index: 32;
+  top: 0;
+}
+
+/* Add proper padding to the main content area to prevent overlap with the navbar */
+body {
+  padding-top: 4rem;
+}
+
+/* Ensure content is positioned properly on mobile */
+@media (max-width: 768px) {
+  body {
+    padding-top: 3.5rem;
+  }
+}
