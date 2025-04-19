@@ -200,7 +200,7 @@ resource "aws_instance" "example" {
   user_data = <<-EOF
 #!/bin/bash
 # Install CloudSnooze
-wget https://github.com/yourusername/cloudsnooze/releases/download/v1.0.0/cloudsnooze_1.0.0_amd64.deb
+wget https://github.com/scttfrdmn/cloudsnooze/releases/download/v1.0.0/cloudsnooze_1.0.0_amd64.deb
 dpkg -i cloudsnooze_1.0.0_amd64.deb
 
 # Configure and start the service
@@ -332,7 +332,7 @@ yum update -y
 yum install -y wget
 
 # Download and install CloudSnooze
-wget https://github.com/yourusername/cloudsnooze/releases/download/v1.0.0/cloudsnooze-1.0.0-1.x86_64.rpm
+wget https://github.com/scttfrdmn/cloudsnooze/releases/download/v1.0.0/cloudsnooze-1.0.0-1.x86_64.rpm
 rpm -i cloudsnooze-1.0.0-1.x86_64.rpm
 
 # Configure CloudSnooze
@@ -376,7 +376,7 @@ apt-get update
 apt-get install -y wget
 
 # Download and install CloudSnooze
-wget https://github.com/yourusername/cloudsnooze/releases/download/v1.0.0/cloudsnooze_1.0.0_amd64.deb
+wget https://github.com/scttfrdmn/cloudsnooze/releases/download/v1.0.0/cloudsnooze_1.0.0_amd64.deb
 dpkg -i cloudsnooze_1.0.0_amd64.deb
 
 # Configure CloudSnooze

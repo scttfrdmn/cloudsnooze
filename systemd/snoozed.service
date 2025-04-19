@@ -1,6 +1,6 @@
 [Unit]
 Description=CloudSnooze Daemon
-Documentation=https://github.com/yourusername/cloudsnooze
+Documentation=https://github.com/scttfrdmn/cloudsnooze
 After=network.target
 
 [Service]

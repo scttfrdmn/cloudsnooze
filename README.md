@@ -117,7 +117,7 @@ To build CloudSnooze from source:
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/cloudsnooze.git
+git clone https://github.com/scttfrdmn/cloudsnooze.git
 cd cloudsnooze
 
 # Build daemon

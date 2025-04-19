@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/yourusername/cloudsnooze/daemon/api"
-	"github.com/yourusername/cloudsnooze/daemon/monitor"
+	"github.com/scttfrdmn/cloudsnooze/daemon/api"
+	"github.com/scttfrdmn/cloudsnooze/daemon/monitor"
 )
 
 var (

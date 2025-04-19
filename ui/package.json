@@ -1,5 +1,5 @@
 {
-  "name": "snooze-gui",
+  "name": "cloudsnooze-gui",
   "version": "0.1.0",
   "description": "CloudSnooze GUI - Automatically stop idle cloud instances",
   "main": "main.js",
