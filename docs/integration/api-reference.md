@@ -1,3 +1,8 @@
+<!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # CloudSnooze API Reference
 
 This document provides detailed information about CloudSnooze's APIs for integration with other tools and systems.

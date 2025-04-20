@@ -1,3 +1,8 @@
+<!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # CloudSnooze - Data Model
 
 This document defines the primary data structures used in CloudSnooze, including configuration, metrics, and communication protocols.

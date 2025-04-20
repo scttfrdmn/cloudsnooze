@@ -1,3 +1,8 @@
+<!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # CloudSnooze Integration Guide for External Tools
 
 This document describes how external tools like provisioners, schedulers, and monitoring systems can integrate with CloudSnooze to detect and respond to instance stop events.

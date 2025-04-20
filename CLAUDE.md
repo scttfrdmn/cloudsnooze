@@ -1,3 +1,8 @@
+<!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # CLAUDE.md - CloudSnooze Project
 
 ## Project Overview

@@ -1,3 +1,8 @@
+<!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # CloudSnooze Development Roadmap
 
 This document outlines the planned development roadmap for CloudSnooze. The roadmap is organized into phases, with each phase building upon the previous one.

@@ -1,3 +1,8 @@
+<!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # CloudSnooze Deployment Templates
 
 This document provides templates and examples for deploying CloudSnooze in various cloud environments.

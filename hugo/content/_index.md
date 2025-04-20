@@ -3,6 +3,12 @@ title: "CloudSnooze"
 linkTitle: "Home"
 ---
 
+<!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
+
+
 # CloudSnooze
 
 CloudSnooze is a tool for automatically stopping idle cloud instances to save costs. The system monitors various system metrics (CPU, memory, network, disk I/O, user activity, GPU usage) and stops instances when they remain below specified thresholds for a defined period.

@@ -1,3 +1,8 @@
+/**
+ * Copyright 2025 Scott Friedman and CloudSnooze Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 const { app, BrowserWindow, Menu, Tray, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -15,7 +20,7 @@ let isQuitting = false;
 
 // Default socket path
 const DEFAULT_SOCKET_PATH = process.platform === 'win32'
-  ? '\\\\.\\pipe\\snooze.sock'
+  ? '\\.\pipe\snooze.sock'
   : '/var/run/snooze.sock';
 
 async function createWindow() {

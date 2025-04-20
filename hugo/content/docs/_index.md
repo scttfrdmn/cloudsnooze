@@ -7,6 +7,12 @@ menu:
     weight: 20
 ---
 
+<!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
+
+
 # CloudSnooze Documentation
 
 Welcome to the CloudSnooze documentation. Here you'll find information about:

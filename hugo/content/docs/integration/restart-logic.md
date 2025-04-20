@@ -1,3 +1,8 @@
+<!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # CloudSnooze Restart Logic for External Tools
 
 This document provides detailed guidance on implementing restart logic for instances that have been stopped by CloudSnooze.

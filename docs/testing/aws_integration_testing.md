@@ -1,3 +1,8 @@
+<!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # AWS Integration Testing for CloudSnooze
 
 This document explains how to set up and run AWS integration tests for CloudSnooze.
