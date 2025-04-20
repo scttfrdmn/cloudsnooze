@@ -1,0 +1,112 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ['1.21.x', '1.22.x']
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Build daemon
+      run: |
+        cd daemon
+        go build -v -o snoozed
+        if [ $? -ne 0 ]; then
+          echo "Build failed"
+          exit 1
+        fi
+
+    - name: Test daemon
+      run: |
+        cd daemon
+        go test -v ./...
+
+    - name: Build CLI
+      run: |
+        cd cli
+        go build -v -o snooze
+        if [ $? -ne 0 ]; then
+          echo "Build failed"
+          exit 1
+        fi
+
+    - name: Test CLI
+      run: |
+        cd cli
+        go test -v ./...
+
+    - name: Lint Go Code
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
+        args: --timeout=5m
+
+  build-cross-platform:
+    name: Build Cross-Platform
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux_amd64
+          - goos: linux
+            goarch: arm64
+            suffix: linux_arm64
+          - goos: darwin
+            goarch: amd64
+            suffix: darwin_amd64
+          - goos: darwin
+            goarch: arm64
+            suffix: darwin_arm64
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21.x'
+
+    - name: Build for ${{ matrix.goos }}_${{ matrix.goarch }}
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+      run: |
+        mkdir -p dist
+        
+        echo "Building daemon for $GOOS/$GOARCH"
+        cd daemon
+        go build -v -o ../dist/snoozed_${{ matrix.suffix }}
+        cd ..
+        
+        echo "Building CLI for $GOOS/$GOARCH"
+        cd cli
+        go build -v -o ../dist/snooze_${{ matrix.suffix }}
+        cd ..
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: binaries-${{ matrix.suffix }}
+        path: dist/

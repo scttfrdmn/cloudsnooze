@@ -19,6 +19,21 @@
   <a href="https://scttfrdmn.github.io/cloudsnooze/">Website</a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/scttfrdmn/cloudsnooze/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License"></a>
+  <a href="https://github.com/scttfrdmn/cloudsnooze/releases"><img src="https://img.shields.io/badge/version-v0.1.0--alpha-orange" alt="Version"></a>
+  <a href="https://go.dev/dl/"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go" alt="Go Version"></a>
+  <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS-lightgrey" alt="Platform">
+  <img src="https://img.shields.io/badge/architecture-x86__64%20%7C%20ARM64-green" alt="Architecture">
+</p>
+<p align="center">
+  <a href="https://github.com/scttfrdmn/cloudsnooze/actions"><img src="https://img.shields.io/github/actions/workflow/status/scttfrdmn/cloudsnooze/build.yml?branch=main&logo=github" alt="Build Status"></a>
+  <a href="https://cloudsnooze.io/docs/"><img src="https://img.shields.io/badge/docs-cloudsnooze.io-blue?logo=gitbook" alt="Documentation"></a>
+  <img src="https://img.shields.io/badge/cloud-AWS%20%7C%20GCP%20%7C%20Azure-4285F4" alt="Cloud Support">
+  <img src="https://img.shields.io/badge/status-alpha-red" alt="Status">
+  <a href="https://github.com/scttfrdmn/cloudsnooze/graphs/contributors"><img src="https://img.shields.io/github/contributors/scttfrdmn/cloudsnooze" alt="Contributors"></a>
+</p>
+
 ## Features
 
 - **Low Resource Usage**: Lightweight Go daemon with minimal impact on the monitored instance
