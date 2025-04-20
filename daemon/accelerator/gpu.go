@@ -10,13 +10,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/scttfrdmn/cloudsnooze/daemon/monitor"
+	"github.com/scttfrdmn/cloudsnooze/daemon/common"
 )
 
 // GPUMonitor is the interface for GPU monitoring
 type GPUMonitor interface {
 	// GetMetrics returns metrics for all detected GPUs
-	GetMetrics() ([]monitor.GPUMetric, error)
+	GetMetrics() ([]common.GPUMetrics, error)
 	
 	// IsAvailable returns true if this GPU type is available
 	IsAvailable() bool
@@ -37,7 +37,7 @@ func (m *NvidiaMonitor) IsAvailable() bool {
 }
 
 // GetMetrics returns metrics for all NVIDIA GPUs
-func (m *NvidiaMonitor) GetMetrics() ([]monitor.GPUMetric, error) {
+func (m *NvidiaMonitor) GetMetrics() ([]common.GPUMetrics, error) {
 	if !m.IsAvailable() {
 		return nil, fmt.Errorf("nvidia-smi not available")
 	}
@@ -50,7 +50,7 @@ func (m *NvidiaMonitor) GetMetrics() ([]monitor.GPUMetric, error) {
 	}
 
 	// Parse output
-	var metrics []monitor.GPUMetric
+	var metrics []common.GPUMetrics
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -69,10 +69,10 @@ func (m *NvidiaMonitor) GetMetrics() ([]monitor.GPUMetric, error) {
 		memoryTotal, _ := strconv.ParseUint(parts[4], 10, 64)
 		temperature, _ := strconv.ParseFloat(parts[5], 64)
 
-		metrics = append(metrics, monitor.GPUMetric{
-			Type:        "NVIDIA",
-			ID:          index,
-			Name:        parts[1],
+		metrics = append(metrics, common.GPUMetrics{
+			ID:          fmt.Sprintf("%d", index),
+			Vendor:      "NVIDIA",
+			Model:       parts[1],
 			Utilization: utilization,
 			MemoryUsed:  memoryUsed,
 			MemoryTotal: memoryTotal,
@@ -98,7 +98,7 @@ func (m *AMDMonitor) IsAvailable() bool {
 }
 
 // GetMetrics returns metrics for all AMD GPUs
-func (m *AMDMonitor) GetMetrics() ([]monitor.GPUMetric, error) {
+func (m *AMDMonitor) GetMetrics() ([]common.GPUMetrics, error) {
 	if !m.IsAvailable() {
 		return nil, fmt.Errorf("rocm-smi not available")
 	}
@@ -111,7 +111,7 @@ func (m *AMDMonitor) GetMetrics() ([]monitor.GPUMetric, error) {
 	}
 
 	// Parse output
-	var metrics []monitor.GPUMetric
+	var metrics []common.GPUMetrics
 	
 	// AMD GPUs don't have a clean CSV output like NVIDIA
 	// This is a simplified parser
@@ -121,23 +121,21 @@ func (m *AMDMonitor) GetMetrics() ([]monitor.GPUMetric, error) {
 	memoryUsedRegex := regexp.MustCompile(`GPU memory use\s+:\s+(\d+)MiB / (\d+)MiB`)
 	tempRegex := regexp.MustCompile(`Temperature\s+:\s+(\d+\.\d+)c`)
 	
-	var currentID int
-	var currentGPU monitor.GPUMetric
+	var currentGPU common.GPUMetrics
 	
 	for _, line := range lines {
 		if match := gpuRegex.FindStringSubmatch(line); match != nil {
 			// Save previous GPU if we're processing a new one
-			if currentGPU.Type != "" {
+			if currentGPU.Vendor != "" {
 				metrics = append(metrics, currentGPU)
 			}
 			
 			// Start new GPU
-			id, _ := strconv.Atoi(match[1])
-			currentID = id
-			currentGPU = monitor.GPUMetric{
-				Type: "AMD",
-				ID:   id,
-				Name: fmt.Sprintf("AMD GPU %d", id),
+			id := match[1]
+			currentGPU = common.GPUMetrics{
+				ID:     id,
+				Vendor: "AMD",
+				Model:  fmt.Sprintf("AMD GPU %s", id),
 			}
 		} else if match := utilizationRegex.FindStringSubmatch(line); match != nil {
 			utilization, _ := strconv.ParseFloat(match[1], 64)
@@ -154,7 +152,7 @@ func (m *AMDMonitor) GetMetrics() ([]monitor.GPUMetric, error) {
 	}
 	
 	// Add the last GPU if we have one
-	if currentGPU.Type != "" {
+	if currentGPU.Vendor != "" {
 		metrics = append(metrics, currentGPU)
 	}
 
@@ -178,9 +176,46 @@ func NewGPUService() *GPUService {
 	return service
 }
 
+// CreateGPUService is a factory function to create a GPU service without importing accelerator package
+// This function can be called from an external package to get a GPU service that implements the common.AcceleratorInterface
+func CreateGPUService() common.AcceleratorInterface {
+	return NewGPUService()
+}
+
+// Initialize implements the AcceleratorInterface
+func (s *GPUService) Initialize() error {
+	// Nothing to initialize for now
+	return nil
+}
+
+// GetMetrics implements the AcceleratorInterface
+func (s *GPUService) GetMetrics() ([]common.GPUMetrics, error) {
+	return s.GetAllMetrics()
+}
+
+// GetUtilization implements the AcceleratorInterface
+func (s *GPUService) GetUtilization() (float64, error) {
+	metrics, err := s.GetAllMetrics()
+	if err != nil {
+		return 0, err
+	}
+	
+	if len(metrics) == 0 {
+		return 0, nil
+	}
+	
+	// Calculate average utilization
+	var totalUtil float64
+	for _, gpu := range metrics {
+		totalUtil += gpu.Utilization
+	}
+	
+	return totalUtil / float64(len(metrics)), nil
+}
+
 // GetAllMetrics returns metrics from all available GPU types
-func (s *GPUService) GetAllMetrics() ([]monitor.GPUMetric, error) {
-	var allMetrics []monitor.GPUMetric
+func (s *GPUService) GetAllMetrics() ([]common.GPUMetrics, error) {
+	var allMetrics []common.GPUMetrics
 	var errs []string
 
 	for _, monitor := range s.monitors {

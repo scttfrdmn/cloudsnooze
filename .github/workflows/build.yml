@@ -26,6 +26,8 @@ jobs:
     - name: Build daemon
       run: |
         cd daemon
+        go mod tidy
+        go get github.com/shirou/gopsutil/v3/cpu github.com/shirou/gopsutil/v3/disk github.com/shirou/gopsutil/v3/mem github.com/shirou/gopsutil/v3/net
         go build -v -o snoozed
         if [ $? -ne 0 ]; then
           echo "Build failed"
@@ -40,6 +42,8 @@ jobs:
     - name: Build CLI
       run: |
         cd cli
+        go mod tidy
+        go get github.com/scttfrdmn/cloudsnooze/daemon/api
         go build -v -o snooze
         if [ $? -ne 0 ]; then
           echo "Build failed"
@@ -97,11 +101,15 @@ jobs:
         
         echo "Building daemon for $GOOS/$GOARCH"
         cd daemon
+        go mod tidy
+        go get github.com/shirou/gopsutil/v3/cpu github.com/shirou/gopsutil/v3/disk github.com/shirou/gopsutil/v3/mem github.com/shirou/gopsutil/v3/net
         go build -v -o ../dist/snoozed_${{ matrix.suffix }}
         cd ..
         
         echo "Building CLI for $GOOS/$GOARCH"
         cd cli
+        go mod tidy
+        go get github.com/scttfrdmn/cloudsnooze/daemon/api
         go build -v -o ../dist/snooze_${{ matrix.suffix }}
         cd ..
 

@@ -13,9 +13,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/scttfrdmn/cloudsnooze/daemon/accelerator"
 	"github.com/scttfrdmn/cloudsnooze/daemon/api"
 	"github.com/scttfrdmn/cloudsnooze/daemon/cloud"
 	"github.com/scttfrdmn/cloudsnooze/daemon/cloud/aws"
+	"github.com/scttfrdmn/cloudsnooze/daemon/common"
 	"github.com/scttfrdmn/cloudsnooze/daemon/monitor"
 )
 
@@ -53,6 +55,18 @@ func main() {
 		config.CheckIntervalSeconds*1000,
 		config.GPUMonitoringEnabled,
 	)
+	
+	// Initialize GPU service and inject it into the system monitor
+	if config.GPUMonitoringEnabled {
+		// Use the factory function to create a GPU service
+		gpuService := accelerator.CreateGPUService()
+		// Initialize the service
+		if err := gpuService.Initialize(); err != nil {
+			log.Printf("Warning: Failed to initialize GPU service: %v", err)
+		}
+		// Inject the service into the system monitor
+		systemMonitor.SetGPUService(gpuService)
+	}
 	
 	// Set up AWS cloud provider
 	awsConfig := aws.Config{
@@ -152,7 +166,7 @@ func loadConfig(path string) (Config, error) {
 	return config, nil
 }
 
-func monitorLoop(systemMonitor *monitor.SystemMonitor, cloudProvider cloud.Provider, config Config, done chan bool) {
+func monitorLoop(systemMonitor *monitor.SystemMonitor, cloudProvider common.CloudProvider, config Config, done chan bool) {
 	ticker := time.NewTicker(time.Duration(config.CheckIntervalSeconds) * time.Second)
 	defer ticker.Stop()
 
@@ -225,7 +239,7 @@ func monitorLoop(systemMonitor *monitor.SystemMonitor, cloudProvider cloud.Provi
 	}
 }
 
-func registerCommandHandlers(server *api.SocketServer, systemMonitor *monitor.SystemMonitor, config Config, cloudProvider cloud.Provider) {
+func registerCommandHandlers(server *api.SocketServer, systemMonitor *monitor.SystemMonitor, config Config, cloudProvider common.CloudProvider) {
 	
 	// STATUS command
 	server.RegisterHandler("STATUS", func(params map[string]interface{}) (interface{}, error) {
@@ -239,7 +253,7 @@ func registerCommandHandlers(server *api.SocketServer, systemMonitor *monitor.Sy
 		shouldSnooze, reason := systemMonitor.ShouldSnooze()
 		
 		// Get instance info if available
-		var instanceInfo *cloud.InstanceInfo
+		var instanceInfo *common.InstanceInfo
 		if cloudProvider != nil {
 			instanceInfo, _ = cloudProvider.GetInstanceInfo()
 		}

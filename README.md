@@ -117,6 +117,21 @@ After installation, CloudSnooze runs with default settings that work for most sc
    snooze logs
    ```
 
+## Monitoring Metrics and Thresholds
+
+CloudSnooze monitors these metrics to determine instance idle state:
+
+| Metric | Parameter | Description | Default | Units |
+|--------|-----------|-------------|---------|-------|
+| CPU Usage | `cpu_threshold_percent` | Average CPU utilization across all cores | 10.0 | Percentage (0-100) |
+| Memory Usage | `memory_threshold_percent` | Percentage of used memory relative to total memory | 30.0 | Percentage (0-100) |
+| Network Traffic | `network_threshold_kbps` | Combined ingress/egress network traffic | 50.0 | Kilobytes per second |
+| Disk I/O | `disk_io_threshold_kbps` | Combined read/write disk operations | 100.0 | Kilobytes per second |
+| Input Activity | `input_idle_threshold_secs` | Time since last keyboard/mouse activity | 900 | Seconds |
+| GPU Usage | `gpu_threshold_percent` | Average GPU utilization across all detected GPUs | 5.0 | Percentage (0-100) |
+
+An instance is considered idle when **all** metrics remain below their thresholds for the duration specified by `naptime_minutes` (default: 30 minutes).
+
 ## Documentation
 
 - [Overview](docs/design/overview.md) - Project overview and architecture

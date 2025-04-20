@@ -11,8 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/scttfrdmn/cloudsnooze/daemon/cloud"
-	"github.com/scttfrdmn/cloudsnooze/daemon/monitor"
+	"github.com/scttfrdmn/cloudsnooze/daemon/common"
 )
 
 const (
@@ -38,10 +37,10 @@ type Config struct {
 	AllowedRestarterIDs []string // List of service IDs allowed to restart instances
 }
 
-// Provider implements the cloud.Provider interface for AWS
+// Provider implements the common.CloudProvider interface for AWS
 type Provider struct {
 	config Config
-	instanceInfo *cloud.InstanceInfo
+	instanceInfo *common.InstanceInfo
 	// Add a channel for tag polling if needed in the future
 	tagPollingDone chan bool
 }
@@ -77,7 +76,7 @@ func (p *Provider) VerifyPermissions() (bool, error) {
 }
 
 // GetInstanceInfo retrieves information about the current instance
-func (p *Provider) GetInstanceInfo() (*cloud.InstanceInfo, error) {
+func (p *Provider) GetInstanceInfo() (*common.InstanceInfo, error) {
 	// Return cached info if available
 	if p.instanceInfo != nil {
 		return p.instanceInfo, nil
@@ -117,7 +116,7 @@ func (p *Provider) GetInstanceInfo() (*cloud.InstanceInfo, error) {
 	}
 
 	// Create and cache instance info
-	p.instanceInfo = &cloud.InstanceInfo{
+	p.instanceInfo = &common.InstanceInfo{
 		ID:       instanceID,
 		Type:     instanceType,
 		Region:   region,
@@ -129,7 +128,7 @@ func (p *Provider) GetInstanceInfo() (*cloud.InstanceInfo, error) {
 }
 
 // StopInstance stops the current instance
-func (p *Provider) StopInstance(reason string, metrics monitor.SystemMetrics) error {
+func (p *Provider) StopInstance(reason string, metrics common.SystemMetrics) error {
 	instanceInfo, err := p.GetInstanceInfo()
 	if err != nil {
 		return fmt.Errorf("failed to get instance info: %v", err)
@@ -157,11 +156,11 @@ func (p *Provider) StopInstance(reason string, metrics monitor.SystemMetrics) er
 		// Add detailed tags if enabled
 		if p.config.DetailedTags {
 			// Add system metrics
-			tags[fmt.Sprintf("%s:CPUPercent", p.config.TaggingPrefix)] = fmt.Sprintf("%.2f", metrics.CPUPercent)
-			tags[fmt.Sprintf("%s:MemoryPercent", p.config.TaggingPrefix)] = fmt.Sprintf("%.2f", metrics.MemoryPercent)
-			tags[fmt.Sprintf("%s:NetworkKBps", p.config.TaggingPrefix)] = fmt.Sprintf("%.2f", metrics.NetworkKBps)
-			tags[fmt.Sprintf("%s:DiskIOKBps", p.config.TaggingPrefix)] = fmt.Sprintf("%.2f", metrics.DiskIOKBps)
-			tags[fmt.Sprintf("%s:InputIdleSecs", p.config.TaggingPrefix)] = fmt.Sprintf("%d", metrics.InputIdleSecs)
+			tags[fmt.Sprintf("%s:CPUPercent", p.config.TaggingPrefix)] = fmt.Sprintf("%.2f", metrics.CPUUsage)
+			tags[fmt.Sprintf("%s:MemoryPercent", p.config.TaggingPrefix)] = fmt.Sprintf("%.2f", metrics.MemoryUsage)
+			tags[fmt.Sprintf("%s:NetworkKBps", p.config.TaggingPrefix)] = fmt.Sprintf("%.2f", metrics.NetworkRate)
+			tags[fmt.Sprintf("%s:DiskIOKBps", p.config.TaggingPrefix)] = fmt.Sprintf("%.2f", metrics.DiskIORate)
+			tags[fmt.Sprintf("%s:IdleTime", p.config.TaggingPrefix)] = fmt.Sprintf("%d", metrics.IdleTime)
 			
 			// Add GPU metrics if available
 			if len(metrics.GPUMetrics) > 0 {
@@ -324,11 +323,11 @@ func getMetadata(token, path string) (string, error) {
 	return strings.TrimSpace(string(data)), nil
 }
 
-// AWSFactory implements the cloud.ProviderFactory interface
+// AWSFactory implements the factory for creating AWS providers
 type AWSFactory struct{}
 
 // CreateProvider creates an AWS provider with the given config
-func (f *AWSFactory) CreateProvider(config interface{}) (cloud.Provider, error) {
+func (f *AWSFactory) CreateProvider(config interface{}) (common.CloudProvider, error) {
 	awsConfig, ok := config.(Config)
 	if !ok {
 		return nil, errors.New("invalid AWS configuration")

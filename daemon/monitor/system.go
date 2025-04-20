@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 	
-	"github.com/scttfrdmn/cloudsnooze/daemon/accelerator"
+	"github.com/scttfrdmn/cloudsnooze/daemon/common"
 )
 
 // SystemMonitor coordinates all monitoring activities
@@ -29,17 +29,24 @@ type SystemMonitor struct {
 	// Tracking data
 	idleSince          *time.Time
 	napTimeMinutes     int
-	lastMetrics        SystemMetrics
+	lastMetrics        common.SystemMetrics
 	checkIntervalMs    int
 	
 	// GPU monitoring
 	gpuMonitoringEnabled bool
-	gpuService           *accelerator.GPUService
+	gpuService           common.AcceleratorInterface
 }
 
 // NewSystemMonitor creates a new system monitor
 func NewSystemMonitor(cpuThreshold, memoryThreshold, networkThreshold, diskThreshold, gpuThreshold float64, 
 	inputThreshold, napTimeMinutes, checkIntervalMs int, gpuMonitoringEnabled bool) *SystemMonitor {
+	
+	// Import from the accelerator package is now accessed via factory
+	// to avoid circular dependencies
+	var gpuService common.AcceleratorInterface
+	
+	// For now, we'll create the accelerator in another function to break the import cycle
+	// Typically we would use a factory or dependency injection pattern
 	
 	return &SystemMonitor{
 		cpuMonitor:      NewCPUMonitor(),
@@ -59,14 +66,20 @@ func NewSystemMonitor(cpuThreshold, memoryThreshold, networkThreshold, diskThres
 		checkIntervalMs:  checkIntervalMs,
 		
 		gpuMonitoringEnabled: gpuMonitoringEnabled,
-		gpuService:           accelerator.NewGPUService(),
+		gpuService:           gpuService, // Will be set later via SetGPUService
 	}
 }
 
+// SetGPUService sets the GPU monitoring service
+// This is used to break circular dependencies
+func (m *SystemMonitor) SetGPUService(service common.AcceleratorInterface) {
+	m.gpuService = service
+}
+
 // CollectMetrics gathers all system metrics and evaluates idle status
-func (m *SystemMonitor) CollectMetrics() (SystemMetrics, error) {
-	metrics := SystemMetrics{
-		Timestamp: time.Now(),
+func (m *SystemMonitor) CollectMetrics() (common.SystemMetrics, error) {
+	metrics := common.SystemMetrics{
+		CollectionTime: time.Now().Unix(),
 	}
 	
 	// Collect CPU metrics
@@ -74,28 +87,28 @@ func (m *SystemMonitor) CollectMetrics() (SystemMetrics, error) {
 	if err != nil {
 		return metrics, fmt.Errorf("error collecting CPU metrics: %v", err)
 	}
-	metrics.CPUPercent = cpuUsage
+	metrics.CPUUsage = cpuUsage
 	
 	// Collect memory metrics
 	memoryUsage, err := m.memoryMonitor.GetUsage()
 	if err != nil {
 		return metrics, fmt.Errorf("error collecting memory metrics: %v", err)
 	}
-	metrics.MemoryPercent = memoryUsage
+	metrics.MemoryUsage = memoryUsage
 	
 	// Collect network metrics
 	networkUsage, err := m.networkMonitor.GetUsage()
 	if err != nil {
 		return metrics, fmt.Errorf("error collecting network metrics: %v", err)
 	}
-	metrics.NetworkKBps = networkUsage
+	metrics.NetworkRate = networkUsage
 	
 	// Collect disk metrics
 	diskUsage, err := m.diskMonitor.GetUsage()
 	if err != nil {
 		return metrics, fmt.Errorf("error collecting disk metrics: %v", err)
 	}
-	metrics.DiskIOKBps = diskUsage
+	metrics.DiskIORate = diskUsage
 	
 	// Collect input activity metrics
 	inputIdleSecs, err := m.inputMonitor.GetIdleSeconds()
@@ -104,11 +117,11 @@ func (m *SystemMonitor) CollectMetrics() (SystemMetrics, error) {
 		fmt.Printf("Warning: Failed to get input metrics: %v\n", err)
 		inputIdleSecs = 0
 	}
-	metrics.InputIdleSecs = inputIdleSecs
+	metrics.LastInputTime = time.Now().Unix() - int64(inputIdleSecs)
 	
 	// Collect GPU metrics if enabled
-	if m.gpuMonitoringEnabled {
-		gpuMetrics, err := m.gpuService.GetAllMetrics()
+	if m.gpuMonitoringEnabled && m.gpuService != nil {
+		gpuMetrics, err := m.gpuService.GetMetrics()
 		if err != nil {
 			// Just log and continue
 			fmt.Printf("Warning: Failed to get GPU metrics: %v\n", err)
@@ -117,90 +130,62 @@ func (m *SystemMonitor) CollectMetrics() (SystemMetrics, error) {
 		}
 	}
 	
-	// Determine idle status based on all metrics
-	metrics.IdleStatus = false
-	var reasons []string
-	
-	if cpuUsage < m.cpuThreshold {
-		reasons = append(reasons, fmt.Sprintf("CPU usage %.1f%% below threshold %.1f%%", cpuUsage, m.cpuThreshold))
-	} else {
-		metrics.IdleStatus = false
+	// Check CPU usage - if above threshold, system is not idle
+	if cpuUsage >= m.cpuThreshold {
 		m.idleSince = nil
-		metrics.IdleReason = fmt.Sprintf("CPU usage %.1f%% above threshold %.1f%%", cpuUsage, m.cpuThreshold)
 		m.lastMetrics = metrics
 		return metrics, nil
 	}
 	
-	if memoryUsage < m.memoryThreshold {
-		reasons = append(reasons, fmt.Sprintf("Memory usage %.1f%% below threshold %.1f%%", memoryUsage, m.memoryThreshold))
-	} else {
-		metrics.IdleStatus = false
+	// Check memory usage
+	if memoryUsage >= m.memoryThreshold {
 		m.idleSince = nil
-		metrics.IdleReason = fmt.Sprintf("Memory usage %.1f%% above threshold %.1f%%", memoryUsage, m.memoryThreshold)
 		m.lastMetrics = metrics
 		return metrics, nil
 	}
 	
-	if networkUsage < m.networkThreshold {
-		reasons = append(reasons, fmt.Sprintf("Network usage %.1f KB/s below threshold %.1f KB/s", networkUsage, m.networkThreshold))
-	} else {
-		metrics.IdleStatus = false
+	// Check network usage
+	if networkUsage >= m.networkThreshold {
 		m.idleSince = nil
-		metrics.IdleReason = fmt.Sprintf("Network usage %.1f KB/s above threshold %.1f KB/s", networkUsage, m.networkThreshold)
 		m.lastMetrics = metrics
 		return metrics, nil
 	}
 	
-	if diskUsage < m.diskThreshold {
-		reasons = append(reasons, fmt.Sprintf("Disk I/O %.1f KB/s below threshold %.1f KB/s", diskUsage, m.diskThreshold))
-	} else {
-		metrics.IdleStatus = false
+	// Check disk usage
+	if diskUsage >= m.diskThreshold {
 		m.idleSince = nil
-		metrics.IdleReason = fmt.Sprintf("Disk I/O %.1f KB/s above threshold %.1f KB/s", diskUsage, m.diskThreshold)
 		m.lastMetrics = metrics
 		return metrics, nil
 	}
 	
 	// Check input idle time if threshold is set
 	if m.inputThreshold > 0 && inputIdleSecs < m.inputThreshold {
-		metrics.IdleStatus = false
 		m.idleSince = nil
-		metrics.IdleReason = fmt.Sprintf("Input idle time %d secs below threshold %d secs", inputIdleSecs, m.inputThreshold)
 		m.lastMetrics = metrics
 		return metrics, nil
-	} else if m.inputThreshold > 0 {
-		reasons = append(reasons, fmt.Sprintf("Input idle time %d secs above threshold %d secs", inputIdleSecs, m.inputThreshold))
 	}
 	
 	// Check GPU usage if enabled
 	if m.gpuMonitoringEnabled && len(metrics.GPUMetrics) > 0 {
 		for _, gpu := range metrics.GPUMetrics {
 			if gpu.Utilization > m.gpuThreshold {
-				metrics.IdleStatus = false
 				m.idleSince = nil
-				metrics.IdleReason = fmt.Sprintf("GPU %d (%s) usage %.1f%% above threshold %.1f%%", 
-					gpu.ID, gpu.Name, gpu.Utilization, m.gpuThreshold)
 				m.lastMetrics = metrics
 				return metrics, nil
 			}
 		}
-		
-		// All GPUs are below threshold
-		reasons = append(reasons, fmt.Sprintf("All GPUs below usage threshold %.1f%%", m.gpuThreshold))
 	}
 	
-	// If we got here, all metrics are below thresholds
-	metrics.IdleStatus = true
-	
-	// Handle idle state tracking
+	// At this point, the system is idle (all metrics below thresholds)
+	// Update idle state tracking
 	if m.idleSince == nil {
 		now := time.Now()
 		m.idleSince = &now
-		metrics.IdleReason = "System just became idle"
-	} else {
-		idleDuration := time.Since(*m.idleSince)
-		metrics.IdleReason = fmt.Sprintf("System idle for %s", idleDuration.Round(time.Second))
 	}
+	
+	// Set idle time in metrics
+	idleDuration := time.Since(*m.idleSince)
+	metrics.IdleTime = idleDuration.Milliseconds() / 1000 // Convert to seconds
 	
 	m.lastMetrics = metrics
 	return metrics, nil
@@ -225,7 +210,7 @@ func (m *SystemMonitor) ShouldSnooze() (bool, string) {
 }
 
 // GetLastMetrics returns the most recently collected metrics
-func (m *SystemMonitor) GetLastMetrics() SystemMetrics {
+func (m *SystemMonitor) GetLastMetrics() common.SystemMetrics {
 	return m.lastMetrics
 }
 

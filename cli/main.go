@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/yourusername/cloudsnooze/daemon/api"
+	"github.com/scttfrdmn/cloudsnooze/daemon/api"
 )
 
 var (
@@ -217,7 +217,7 @@ func handleConfig(client *api.SocketClient, args []string) {
 			"value": paramValue,
 		}
 		
-		result, err := client.SendCommand("CONFIG_SET", params)
+		_, err := client.SendCommand("CONFIG_SET", params)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)

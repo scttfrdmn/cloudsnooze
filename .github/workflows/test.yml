@@ -23,11 +23,15 @@ jobs:
     - name: Test daemon
       run: |
         cd daemon
+        go mod tidy
+        go get github.com/shirou/gopsutil/v3/cpu github.com/shirou/gopsutil/v3/disk github.com/shirou/gopsutil/v3/mem github.com/shirou/gopsutil/v3/net
         go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
     - name: Test CLI
       run: |
         cd cli
+        go mod tidy
+        go get github.com/scttfrdmn/cloudsnooze/daemon/api
         go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
     - name: Upload coverage reports

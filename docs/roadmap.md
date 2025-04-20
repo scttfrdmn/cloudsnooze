@@ -23,24 +23,33 @@ This document outlines the planned development roadmap for CloudSnooze. The road
 
 ### Phase 1: Core Functionality Completion
 
-1. **Implement Unit Testing Framework**
+1. **Implement Pluggable Cloud Providers**
+   - Develop a flexible provider architecture for extensibility
+   - Create a standardized plugin interface for cloud providers
+   - Implement dynamic loading of provider plugins
+   - Add configuration options for provider selection
+   - Document the provider API for third-party implementations
+   - See [Cloud Provider Architecture](design/cloud-provider-architecture.md) for details
+
+2. **Implement Unit Testing Framework**
    - Set up testing infrastructure for Go components
    - Add tests for core monitoring modules
    - Implement integration tests for the system as a whole
+   - Create CI/CD pipelines for automated testing
 
-2. **Complete AWS SDK Integration**
+3. **Complete AWS SDK Integration**
    - Replace placeholder code with actual AWS SDK calls
    - Implement instance stopping functionality
    - Add proper tag management through the SDK
    - Implement IAM permission verification
 
-3. **Enhance CLI Command Implementation**
+4. **Enhance CLI Command Implementation**
    - Complete the `status` command with live data
    - Implement configuration management commands
    - Add history retrieval functionality
    - Create help and documentation commands
 
-4. **Add Logging Implementation**
+5. **Add Logging Implementation**
    - Implement file-based logging with rotation
    - Add syslog integration
    - Implement CloudWatch logging for AWS
@@ -48,13 +57,13 @@ This document outlines the planned development roadmap for CloudSnooze. The road
 
 ### Phase 2: Packaging and Distribution
 
-5. **Create Packaging Scripts**
+6. **Create Packaging Scripts**
    - Develop DEB packaging for Debian-based systems
    - Implement RPM packaging for Red Hat-based systems
    - Add installation instructions
    - Create configuration templates
 
-6. **Systemd Integration**
+7. **Systemd Integration**
    - Finalize the systemd service configuration
    - Add proper signal handling
    - Implement graceful startup and shutdown
@@ -62,13 +71,13 @@ This document outlines the planned development roadmap for CloudSnooze. The road
 
 ### Phase 3: User Experience
 
-7. **Develop Electron GUI**
+8. **Develop Electron GUI**
    - Create basic UI layout
    - Implement real-time monitoring dashboard
    - Add configuration management interface
    - Develop historical data visualization
 
-8. **Document Installation Process**
+9. **Document Installation Process**
    - Create comprehensive installation guides
    - Add configuration walkthroughs
    - Develop troubleshooting documentation
@@ -76,34 +85,34 @@ This document outlines the planned development roadmap for CloudSnooze. The road
 
 ### Phase 4: Expansion
 
-9. **Plugin Framework Implementation**
-   - Create plugin architecture for extensible idle detection
-   - Develop plugin manager for discovery and lifecycle management
-   - Implement both native Go and external process plugins
-   - Provide SDK and examples for plugin developers
-   - See [Plugin Architecture](design/plugin-architecture.md) for details
+10. **Plugin Framework Implementation**
+    - Create plugin architecture for extensible idle detection
+    - Develop plugin manager for discovery and lifecycle management
+    - Implement both native Go and external process plugins
+    - Provide SDK and examples for plugin developers
+    - See [Plugin Architecture](design/plugin-architecture.md) for details
 
-10. **Event-Driven Plugin Framework**
-   - Implement cloud event monitoring (AWS Spot interrupts, etc.)
-   - Develop event dispatch and handling system
-   - Create plugins for graceful shutdowns and data preservation
-   - Add prioritized event handling for critical operations
-   - See [Event Framework Roadmap](design/plugin-event-roadmap.md) for details
+11. **Event-Driven Plugin Framework**
+    - Implement cloud event monitoring (AWS Spot interrupts, etc.)
+    - Develop event dispatch and handling system
+    - Create plugins for graceful shutdowns and data preservation
+    - Add prioritized event handling for critical operations
+    - See [Event Framework Roadmap](design/plugin-event-roadmap.md) for details
 
-11. **Expand Cloud Provider Support**
-   - Add GCP integration
-   - Implement Azure support
-   - Create abstraction layer for multi-cloud deployments
-   - Test and document cross-cloud functionality
+12. **Expand Cloud Provider Support**
+    - Add GCP integration
+    - Implement Azure support
+    - Create abstraction layer for multi-cloud deployments
+    - Test and document cross-cloud functionality
 
-12. **External Integration Framework**
+13. **External Integration Framework**
     - Implement webhook system for event notifications
     - Add direct integrations with Slack and Microsoft Teams
     - Develop connectors for automation platforms (Zapier, Make.com)
     - Create extensible API for third-party systems
     - See [Integration Roadmap](design/integration-roadmap.md) for details
 
-13. **Advanced Features**
+14. **Advanced Features**
     - Implement predictive idle detection
     - Add scheduled operation policies
     - Create cost savings reports

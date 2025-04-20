@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/scttfrdmn/cloudsnooze/daemon/cloud/aws"
+	"github.com/scttfrdmn/cloudsnooze/daemon/common"
 )
 
 // ProviderType represents a cloud provider type
@@ -46,7 +47,7 @@ func DetectProvider() (ProviderType, error) {
 }
 
 // CreateProvider creates a new provider of the specified type with the given config
-func CreateProvider(providerType ProviderType, config interface{}) (Provider, error) {
+func CreateProvider(providerType ProviderType, config interface{}) (common.CloudProvider, error) {
 	switch providerType {
 	case AWS:
 		awsConfig, ok := config.(aws.Config)
