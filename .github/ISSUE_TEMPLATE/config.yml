@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: CloudSnooze Documentation
+    url: https://cloudsnooze.io/docs/
+    about: Check if your question is answered in the documentation
+  - name: CLI Command Help
+    url: https://cloudsnooze.io/docs/cli-reference.html
+    about: Comprehensive guide to the CloudSnooze CLI commands
+  - name: Security Issue
+    url: https://github.com/scttfrdmn/cloudsnooze/security/policy
+    about: Please report security vulnerabilities as indicated in our security policy

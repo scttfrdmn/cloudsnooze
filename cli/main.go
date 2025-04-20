@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/scttfrdmn/cloudsnooze/cli/cmd"
 	"github.com/scttfrdmn/cloudsnooze/daemon/api"
 )
 
@@ -51,6 +52,10 @@ func main() {
 		showHistory(client, args[1:])
 	case "start", "stop", "restart":
 		controlDaemon(client, command)
+	case "issue":
+		handleIssue(args[1:])
+	case "debug":
+		handleDebug(args[1:])
 	case "help":
 		printUsage()
 	default:
@@ -58,7 +63,7 @@ func main() {
 		printUsage()
 		os.Exit(1)
 	}
-}
+
 
 func printUsage() {
 	fmt.Println("Usage: snooze [options] command [args]")
@@ -71,81 +76,44 @@ func printUsage() {
 	fmt.Println("  start        Start the daemon")
 	fmt.Println("  stop         Stop the daemon")
 	fmt.Println("  restart      Restart the daemon")
+	fmt.Println("  issue        Create a GitHub issue")
+	fmt.Println("  debug        Generate debug information")
 	fmt.Println("  help         Show this help message")
 	fmt.Println("\nRun 'snooze help command' for more information on a command")
-}
+
 
 func showStatus(client *api.SocketClient, args []string) {
-	result, err := client.SendCommand("STATUS", nil)
+	// Check for json flag
+	jsonOutput := false
+	debugOutput := false
+	for _, arg := range args {
+		if arg == "--json" || arg == "-j" {
+			jsonOutput = true
+		}
+		if arg == "--debug" || arg == "-d" {
+			debugOutput = true
+		}
+	}
+	
+	if jsonOutput {
+		jsonData, err := cmd.GetStatusJson(client)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(string(jsonData))
+		return
+	}
+	
+	formatted, err := cmd.FormatStatusOutput(client)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+	
+	fmt.Println(formatted)
 
-	// Convert result to a map
-	data, ok := result.(map[string]interface{})
-	if !ok {
-		fmt.Fprintf(os.Stderr, "Error: unexpected response format\n")
-		os.Exit(1)
-	}
 
-	// Extract metrics
-	metrics, ok := data["metrics"].(map[string]interface{})
-	if !ok {
-		fmt.Fprintf(os.Stderr, "Error: metrics not found in response\n")
-		os.Exit(1)
-	}
-
-	// Display status
-	fmt.Println("CloudSnooze Status")
-	fmt.Println("------------------")
-	fmt.Printf("Version: %s\n", data["version"])
-	
-	// Display idle status
-	if idleSince, ok := data["idle_since"].(string); ok && idleSince != "" {
-		t, err := time.Parse(time.RFC3339, idleSince)
-		if err == nil {
-			fmt.Printf("Idle since: %s (%s ago)\n", 
-				t.Format("2006-01-02 15:04:05"),
-				time.Since(t).Round(time.Second))
-		} else {
-			fmt.Printf("Idle since: %s\n", idleSince)
-		}
-	} else {
-		fmt.Println("System is active")
-	}
-	
-	// Display should snooze
-	if shouldSnooze, ok := data["should_snooze"].(bool); ok {
-		if shouldSnooze {
-			fmt.Printf("Status: WILL SNOOZE - %s\n", data["snooze_reason"])
-		} else {
-			fmt.Printf("Status: %s\n", data["snooze_reason"])
-		}
-	}
-	
-	fmt.Println("\nCurrent metrics:")
-	fmt.Printf("  - CPU: %.1f%%\n", metrics["cpu_percent"])
-	fmt.Printf("  - Memory: %.1f%%\n", metrics["memory_percent"])
-	fmt.Printf("  - Network: %.1f KB/s\n", metrics["network_kbps"])
-	fmt.Printf("  - Disk I/O: %.1f KB/s\n", metrics["disk_io_kbps"])
-	fmt.Printf("  - Input idle: %ds\n", int(metrics["input_idle_secs"].(float64)))
-	
-	// Display GPU metrics if available
-	if gpuMetrics, ok := metrics["gpu_metrics"].([]interface{}); ok && len(gpuMetrics) > 0 {
-		fmt.Println("\nGPU Metrics:")
-		for i, gpu := range gpuMetrics {
-			gpuData := gpu.(map[string]interface{})
-			fmt.Printf("  - GPU %d [%s %s]: %.1f%% utilized, %.1f MB / %.1f MB memory\n",
-				i+1, 
-				gpuData["type"], 
-				gpuData["name"],
-				gpuData["utilization"],
-				float64(gpuData["memory_used"].(float64))/1024/1024,
-				float64(gpuData["memory_total"].(float64))/1024/1024)
-		}
-	}
-}
 
 func handleConfig(client *api.SocketClient, args []string) {
 	if len(args) < 1 {
@@ -230,7 +198,7 @@ func handleConfig(client *api.SocketClient, args []string) {
 		fmt.Println("Usage: snooze config [list|get|set|reset|import|export]")
 		os.Exit(1)
 	}
-}
+
 
 func showHistory(client *api.SocketClient, args []string) {
 	// Parse flags for history command
@@ -328,9 +296,75 @@ func showHistory(client *api.SocketClient, args []string) {
 	} else if *format != "text" {
 		fmt.Println(string(output_data))
 	}
-}
+
 
 func controlDaemon(client *api.SocketClient, command string) {
 	// TODO: Implement daemon control
 	fmt.Printf("Command '%s' not implemented yet\n", command)
-}
+
+
+func handleIssue(args []string) {
+	// Parse flags for issue command
+	issueCmd := flag.NewFlagSet("issue", flag.ExitOnError)
+	issueType := issueCmd.String("type", "bug", "Issue type (bug, feature, integration, docs)")
+	issueTitle := issueCmd.String("title", "", "Issue title")
+	issueDesc := issueCmd.String("description", "", "Issue description (if not provided, will prompt for input)")
+	issueBrowser := issueCmd.Bool("browser", true, "Open in browser (default) instead of submitting via API")
+	
+	if err := issueCmd.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		os.Exit(1)
+	}
+	
+	// If this is the help command or no arguments, show usage
+	if len(args) == 0 || args[0] == "help" {
+		fmt.Println("Usage: snooze issue [options]")
+		fmt.Println("\nOptions:")
+		issueCmd.PrintDefaults()
+		fmt.Println("\nExamples:")
+		fmt.Println("  snooze issue -type bug -title \"Memory leak in daemon\" -description \"Observed high memory usage\"")
+		fmt.Println("  snooze issue -type feature -title \"Add support for GCP\"")
+		return
+	}
+	
+	// Create the issue
+	if err := cmd.ReportIssue(*issueType, *issueTitle, *issueDesc, *issueBrowser); err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating issue: %v\n", err)
+		os.Exit(1)
+	}
+	
+	if *issueBrowser {
+		fmt.Println("Opening GitHub issue form in your browser...")
+	} else {
+		fmt.Println("Issue submitted successfully!")
+	}
+
+
+func handleDebug(args []string) {
+	// Parse flags for debug command
+	debugCmd := flag.NewFlagSet("debug", flag.ExitOnError)
+	outputFile := debugCmd.String("output", "", "Output file (if not specified, outputs to stdout)")
+	
+	if err := debugCmd.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		os.Exit(1)
+	}
+	
+	// If this is the help command, show usage
+	if len(args) > 0 && args[0] == "help" {
+		fmt.Println("Usage: snooze debug [options]")
+		fmt.Println("\nOptions:")
+		debugCmd.PrintDefaults()
+		fmt.Println("\nExamples:")
+		fmt.Println("  snooze debug                       # Output debug info to console")
+		fmt.Println("  snooze debug -output debug.json    # Save debug info to file")
+		return
+	}
+	
+	fmt.Println("Collecting debug information...")
+	
+	// Generate debug information
+	if err := cmd.SubmitDebugInfo(*outputFile); err != nil {
+		fmt.Fprintf(os.Stderr, "Error generating debug information: %v\n", err)
+		os.Exit(1)
+	}
