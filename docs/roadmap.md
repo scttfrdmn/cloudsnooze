@@ -60,14 +60,19 @@ This document outlines the planned development roadmap for CloudSnooze. The road
 6. **Create Packaging Scripts**
    - Develop DEB packaging for Debian-based systems
    - Implement RPM packaging for Red Hat-based systems
-   - Add installation instructions
-   - Create configuration templates
+   - Create Homebrew formula for macOS
+   - Implement Chocolatey package for Windows
+   - Build Windows MSI installer using WiX
+   - Add detailed installation instructions
+   - Create standardized configuration templates
 
-7. **Systemd Integration**
-   - Finalize the systemd service configuration
+7. **Service Integration**
+   - Finalize systemd service for Linux
+   - Add launchd service for macOS
+   - Implement Windows service
    - Add proper signal handling
-   - Implement graceful startup and shutdown
    - Create service management documentation
+   - Ensure automatic startup across platforms
 
 ### Phase 3: User Experience
 

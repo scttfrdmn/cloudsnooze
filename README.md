@@ -60,7 +60,40 @@ The system consists of three components:
 
 ## Installation
 
-### From GitHub Releases
+### macOS (Homebrew)
+
+```bash
+# Install CloudSnooze
+brew tap scttfrdmn/cloudsnooze
+brew install cloudsnooze
+
+# Start the service
+brew services start cloudsnooze
+
+# Check status
+snooze status
+```
+
+### Windows (Chocolatey)
+
+```powershell
+# Install Chocolatey if not already installed
+# See https://chocolatey.org/install for instructions
+
+# Install CloudSnooze
+choco install cloudsnooze
+
+# Check status
+snooze status
+```
+
+### Windows (MSI Installer)
+
+1. **Download** the MSI installer from [GitHub Releases](https://github.com/scttfrdmn/cloudsnooze/releases)
+2. **Run** the installer (Administrator privileges required)
+3. **Verify** installation with `snooze status` in a new command prompt
+
+### Linux Packages
 
 1. **Download the appropriate package for your system**:
    - For Debian/Ubuntu (x86_64): `cloudsnooze_1.0.0_amd64.deb`

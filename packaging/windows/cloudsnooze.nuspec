@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>cloudsnooze</id>
+    <version>0.1.0</version>
+    <title>CloudSnooze</title>
+    <authors>Scott Friedman and CloudSnooze Contributors</authors>
+    <projectUrl>https://cloudsnooze.io</projectUrl>
+    <licenseUrl>https://github.com/scttfrdmn/cloudsnooze/blob/main/LICENSE</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <projectSourceUrl>https://github.com/scttfrdmn/cloudsnooze</projectSourceUrl>
+    <docsUrl>https://cloudsnooze.io/docs/</docsUrl>
+    <bugTrackerUrl>https://github.com/scttfrdmn/cloudsnooze/issues</bugTrackerUrl>
+    <tags>cloudsnooze aws cloud cost-savings monitoring</tags>
+    <summary>Automatically stop idle cloud instances and save costs</summary>
+    <description>CloudSnooze monitors system resource usage and automatically stops instances when all metrics remain below specified thresholds for a defined period (the "naptime"). This saves costs by ensuring you only pay for compute resources when they're actually needed. The system monitors CPU, memory, network, disk I/O, user input, and GPU activity to determine when a machine is truly idle.</description>
+    <releaseNotes>https://github.com/scttfrdmn/cloudsnooze/releases/tag/v0.1.0</releaseNotes>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>
