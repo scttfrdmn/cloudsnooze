@@ -96,7 +96,14 @@ This document outlines the planned development roadmap for CloudSnooze. The road
    - Create abstraction layer for multi-cloud deployments
    - Test and document cross-cloud functionality
 
-12. **Advanced Features**
+12. **External Integration Framework**
+    - Implement webhook system for event notifications
+    - Add direct integrations with Slack and Microsoft Teams
+    - Develop connectors for automation platforms (Zapier, Make.com)
+    - Create extensible API for third-party systems
+    - See [Integration Roadmap](design/integration-roadmap.md) for details
+
+13. **Advanced Features**
     - Implement predictive idle detection
     - Add scheduled operation policies
     - Create cost savings reports
