@@ -937,6 +937,365 @@ SPDX-License-Identifier: Apache-2.0
 &lt;ul>
 &lt;li>DEB: &lt;code>https://github.com/scttfrdmn/cloudsnooze/releases/download/v0.1.0/cloudsnooze_0.1.0_amd64.deb&lt;/code>&lt;/li>
 &lt;li>RPM: &lt;code>https://github.com/scttfrdmn/cloudsnooze/releases/download/v0.1.0/cloudsnooze-0.1.0-1.x86_64.rpm&lt;/code>&lt;/li>
+&lt;/ul></description></item><item><title>Docs:</title><link>https://cloudsnooze.io/docs/design/integration-roadmap/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://cloudsnooze.io/docs/design/integration-roadmap/</guid><description>
+&lt;!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
+&lt;h1 id="cloudsnooze-integration-roadmap">CloudSnooze Integration Roadmap&lt;/h1>
+&lt;p>This document outlines the plan for integrating CloudSnooze with external communication platforms and automation services, enhancing the project&amp;rsquo;s flexibility and utility.&lt;/p>
+&lt;h2 id="overview">Overview&lt;/h2>
+&lt;p>CloudSnooze provides powerful cloud instance management, but its effectiveness is enhanced when integrated with external services for notifications, automation, and data flow. This roadmap details how CloudSnooze will expand its integration capabilities to support platforms like Slack, Microsoft Teams, and automation hubs like Zapier, Make.com (formerly Integromat), and n8n.&lt;/p>
+&lt;h2 id="integration-types">Integration Types&lt;/h2>
+&lt;p>The integration strategy involves three primary methods:&lt;/p>
+&lt;ol>
+&lt;li>&lt;strong>Webhook-Based Integration&lt;/strong>: Send and receive data via HTTP webhooks&lt;/li>
+&lt;li>&lt;strong>Direct API Integration&lt;/strong>: Purpose-built connectors for specific services&lt;/li>
+&lt;li>&lt;strong>Integration Hub Support&lt;/strong>: Ready-made templates for automation platforms&lt;/li>
+&lt;/ol>
+&lt;h2 id="implementation-phases">Implementation Phases&lt;/h2>
+&lt;h3 id="phase-1-core-webhook-architecture-q3-2025">Phase 1: Core Webhook Architecture (Q3 2025)&lt;/h3>
+&lt;ol>
+&lt;li>
+&lt;p>&lt;strong>Webhook Emission Framework&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Design a flexible event-based webhook system&lt;/li>
+&lt;li>Implement configurable HTTP POST requests for system events&lt;/li>
+&lt;li>Create payload templates for different event types&lt;/li>
+&lt;li>Develop security features (HMAC signing, API keys)&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Notification Events&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Instance start/stop events&lt;/li>
+&lt;li>Threshold crossing alerts&lt;/li>
+&lt;li>Error and warning notifications&lt;/li>
+&lt;li>Cost-saving summaries&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Configuration System&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Add webhook configuration to main config&lt;/li>
+&lt;li>Implement webhook management via CLI&lt;/li>
+&lt;li>Add webhook testing capabilities&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ol>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-json" data-lang="json">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">// Example webhook configuration
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;webhooks&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;instance_stopped&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;url&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;method&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;POST&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;headers&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;Content-Type&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;application/json&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;payload_template&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;slack_instance_stopped&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;enabled&amp;#34;&lt;/span>: &lt;span style="color:#000;font-weight:bold">true&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;retry_count&amp;#34;&lt;/span>: &lt;span style="color:#099">3&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;include_metrics&amp;#34;&lt;/span>: &lt;span style="color:#000;font-weight:bold">true&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="phase-2-direct-platform-integrations-q4-2025">Phase 2: Direct Platform Integrations (Q4 2025)&lt;/h3>
+&lt;ol>
+&lt;li>
+&lt;p>&lt;strong>Slack Integration&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>OAuth-based authentication&lt;/li>
+&lt;li>Rich message formatting with metrics displays&lt;/li>
+&lt;li>Interactive buttons for instance management&lt;/li>
+&lt;li>Channel configuration by event type&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Microsoft Teams Integration&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Teams connector support&lt;/li>
+&lt;li>Adaptive card templates for metrics visualization&lt;/li>
+&lt;li>Action buttons for immediate response&lt;/li>
+&lt;li>Tab integration for persistent dashboard&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Email Notification System&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>SMTP-based notifications&lt;/li>
+&lt;li>HTML email templates with metrics&lt;/li>
+&lt;li>Customizable alert thresholds&lt;/li>
+&lt;li>Digest options (daily/weekly summaries)&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ol>
+&lt;h3 id="phase-3-integration-hub-support-q1-2026">Phase 3: Integration Hub Support (Q1 2026)&lt;/h3>
+&lt;ol>
+&lt;li>
+&lt;p>&lt;strong>Zapier Integration&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Create official Zapier app&lt;/li>
+&lt;li>Define triggers (instance events, threshold alerts)&lt;/li>
+&lt;li>Implement actions (instance control, configuration)&lt;/li>
+&lt;li>Provide pre-built Zap templates&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Make.com (Integromat) Support&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Develop Make.com app module&lt;/li>
+&lt;li>Custom scenario templates&lt;/li>
+&lt;li>Data transformation helpers&lt;/li>
+&lt;li>Scheduling and conditional flows&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>n8n Compatibility&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Node development for n8n&lt;/li>
+&lt;li>Credential handling&lt;/li>
+&lt;li>Workflow templates for common use cases&lt;/li>
+&lt;li>Self-hosted integration guidance&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ol>
+&lt;h3 id="phase-4-advanced-integration-features-q2-2026">Phase 4: Advanced Integration Features (Q2 2026)&lt;/h3>
+&lt;ol>
+&lt;li>
+&lt;p>&lt;strong>Bidirectional Control API&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Remote instance management&lt;/li>
+&lt;li>Configuration updates via API&lt;/li>
+&lt;li>Secure authentication system&lt;/li>
+&lt;li>Rate limiting and access control&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Custom Integration Framework&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Plugin system for third-party integrations&lt;/li>
+&lt;li>Integration SDK with documentation&lt;/li>
+&lt;li>Testing framework for custom integrations&lt;/li>
+&lt;li>Marketplace for community integrations&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Data Export Options&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>CSV/JSON data export of metrics&lt;/li>
+&lt;li>Integration with monitoring platforms&lt;/li>
+&lt;li>Cost analysis data for BI tools&lt;/li>
+&lt;li>Historical data warehousing options&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ol>
+&lt;h2 id="specific-implementation-examples">Specific Implementation Examples&lt;/h2>
+&lt;h3 id="slack-notification-example">Slack Notification Example&lt;/h3>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-go" data-lang="go">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">// slack.go
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>&lt;span style="color:#000;font-weight:bold">package&lt;/span> integrations
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">import&lt;/span> (
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;bytes&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;encoding/json&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;fmt&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;net/http&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;time&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;github.com/scttfrdmn/cloudsnooze/daemon/common&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">type&lt;/span> SlackMessage &lt;span style="color:#000;font-weight:bold">struct&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#d14">`json:&amp;#34;text,omitempty&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Blocks []SlackBlock &lt;span style="color:#d14">`json:&amp;#34;blocks,omitempty&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Attachments []&lt;span style="color:#000;font-weight:bold">interface&lt;/span>{} &lt;span style="color:#d14">`json:&amp;#34;attachments,omitempty&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">type&lt;/span> SlackBlock &lt;span style="color:#000;font-weight:bold">struct&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#d14">`json:&amp;#34;type&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text &lt;span style="color:#000;font-weight:bold">*&lt;/span>SlackText &lt;span style="color:#d14">`json:&amp;#34;text,omitempty&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Fields []SlackText &lt;span style="color:#d14">`json:&amp;#34;fields,omitempty&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">type&lt;/span> SlackText &lt;span style="color:#000;font-weight:bold">struct&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#d14">`json:&amp;#34;type&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#d14">`json:&amp;#34;text&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">func&lt;/span> &lt;span style="color:#900;font-weight:bold">SendSlackInstanceStoppedNotification&lt;/span>(webhook &lt;span style="color:#458;font-weight:bold">string&lt;/span>, metrics common.SystemMetrics, instanceID, reason &lt;span style="color:#458;font-weight:bold">string&lt;/span>) &lt;span style="color:#458;font-weight:bold">error&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> message &lt;span style="color:#000;font-weight:bold">:=&lt;/span> SlackMessage{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Blocks: []SlackBlock{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type: &lt;span style="color:#d14">&amp;#34;header&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text: &lt;span style="color:#000;font-weight:bold">&amp;amp;&lt;/span>SlackText{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type: &lt;span style="color:#d14">&amp;#34;plain_text&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text: &lt;span style="color:#d14">&amp;#34;CloudSnooze: Instance Stopped 💤&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type: &lt;span style="color:#d14">&amp;#34;section&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text: &lt;span style="color:#000;font-weight:bold">&amp;amp;&lt;/span>SlackText{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type: &lt;span style="color:#d14">&amp;#34;mrkdwn&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text: fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;Instance `%s` has been stopped due to inactivity.&amp;#34;&lt;/span>, instanceID),
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type: &lt;span style="color:#d14">&amp;#34;section&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Fields: []SlackText{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {Type: &lt;span style="color:#d14">&amp;#34;mrkdwn&amp;#34;&lt;/span>, Text: fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;*Stop Reason:*\n%s&amp;#34;&lt;/span>, reason)},
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {Type: &lt;span style="color:#d14">&amp;#34;mrkdwn&amp;#34;&lt;/span>, Text: fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;*Stop Time:*\n%s&amp;#34;&lt;/span>, time.&lt;span style="color:#900;font-weight:bold">Now&lt;/span>().&lt;span style="color:#900;font-weight:bold">Format&lt;/span>(time.RFC1123))},
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {Type: &lt;span style="color:#d14">&amp;#34;mrkdwn&amp;#34;&lt;/span>, Text: fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;*CPU Usage:*\n%.2f%%&amp;#34;&lt;/span>, metrics.CPUUsage)},
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {Type: &lt;span style="color:#d14">&amp;#34;mrkdwn&amp;#34;&lt;/span>, Text: fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;*Memory Usage:*\n%.2f%%&amp;#34;&lt;/span>, metrics.MemoryUsage)},
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type: &lt;span style="color:#d14">&amp;#34;section&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text: &lt;span style="color:#000;font-weight:bold">&amp;amp;&lt;/span>SlackText{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type: &lt;span style="color:#d14">&amp;#34;mrkdwn&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text: &lt;span style="color:#d14">&amp;#34;Want to restart this instance? Use `snooze restart INSTANCE_ID` or click below:&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> payload, err &lt;span style="color:#000;font-weight:bold">:=&lt;/span> json.&lt;span style="color:#900;font-weight:bold">Marshal&lt;/span>(message)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> err &lt;span style="color:#000;font-weight:bold">!=&lt;/span> &lt;span style="color:#000;font-weight:bold">nil&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> fmt.&lt;span style="color:#900;font-weight:bold">Errorf&lt;/span>(&lt;span style="color:#d14">&amp;#34;error marshaling Slack message: %w&amp;#34;&lt;/span>, err)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> resp, err &lt;span style="color:#000;font-weight:bold">:=&lt;/span> http.&lt;span style="color:#900;font-weight:bold">Post&lt;/span>(webhook, &lt;span style="color:#d14">&amp;#34;application/json&amp;#34;&lt;/span>, bytes.&lt;span style="color:#900;font-weight:bold">NewBuffer&lt;/span>(payload))
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> err &lt;span style="color:#000;font-weight:bold">!=&lt;/span> &lt;span style="color:#000;font-weight:bold">nil&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> fmt.&lt;span style="color:#900;font-weight:bold">Errorf&lt;/span>(&lt;span style="color:#d14">&amp;#34;error sending Slack notification: %w&amp;#34;&lt;/span>, err)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">defer&lt;/span> resp.Body.&lt;span style="color:#900;font-weight:bold">Close&lt;/span>()
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> resp.StatusCode &lt;span style="color:#000;font-weight:bold">!=&lt;/span> http.StatusOK {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> fmt.&lt;span style="color:#900;font-weight:bold">Errorf&lt;/span>(&lt;span style="color:#d14">&amp;#34;non-200 response from Slack: %d&amp;#34;&lt;/span>, resp.StatusCode)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#000;font-weight:bold">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="zapier-integration-example">Zapier Integration Example&lt;/h3>
+&lt;p>Zapier Trigger: &lt;code>instance_stopped&lt;/code>&lt;/p>
+&lt;p>Trigger payload:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-json" data-lang="json">&lt;span style="display:flex;">&lt;span>{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;event_type&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;instance_stopped&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;instance_id&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;i-1234567890abcdef0&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;timestamp&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;2025-06-15T14:23:45Z&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;region&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;us-east-1&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;metrics&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;cpu_usage&amp;#34;&lt;/span>: &lt;span style="color:#099">1.2&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;memory_usage&amp;#34;&lt;/span>: &lt;span style="color:#099">3.5&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;network_traffic&amp;#34;&lt;/span>: &lt;span style="color:#099">0.1&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;disk_io&amp;#34;&lt;/span>: &lt;span style="color:#099">0.02&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;reason&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;System idle for 30 minutes&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;cost_saved_estimate&amp;#34;&lt;/span>: &lt;span style="color:#099">0.125&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;instance_type&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;t3.medium&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="cli-command-additions">CLI Command Additions&lt;/h3>
+&lt;pre tabindex="0">&lt;code># New CLI integration commands
+snooze integrations list # List all configured integrations
+snooze integrations add slack WEBHOOK_URL # Add Slack integration
+snooze integrations add teams WEBHOOK_URL # Add Microsoft Teams integration
+snooze integrations add email [options] # Add email notifications
+snooze integrations test slack # Test Slack integration
+snooze integrations remove slack # Remove Slack integration
+snooze integrations export zapier # Generate Zapier integration files
+&lt;/code>&lt;/pre>&lt;h2 id="user-benefits">User Benefits&lt;/h2>
+&lt;ol>
+&lt;li>
+&lt;p>&lt;strong>Enhanced Visibility&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Real-time notifications when instances are stopped&lt;/li>
+&lt;li>Alerts when thresholds are approaching&lt;/li>
+&lt;li>Cost-saving reports and insights&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Remote Management&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Control instances through familiar interfaces&lt;/li>
+&lt;li>Automate responses to specific conditions&lt;/li>
+&lt;li>Approval workflows for critical instances&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Workflow Automation&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Connect instance management to other systems&lt;/li>
+&lt;li>Trigger workflows based on cloud events&lt;/li>
+&lt;li>Chain actions across multiple services&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Organizational Awareness&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Keep teams informed of cost-saving activities&lt;/li>
+&lt;li>Provide management with cost reduction metrics&lt;/li>
+&lt;li>Alert developers when their instances are affected&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ol>
+&lt;h2 id="architecture-diagram">Architecture Diagram&lt;/h2>
+&lt;pre tabindex="0">&lt;code> ┌─────────────────┐
+│ │
+│ CloudSnooze │
+│ │
+└─────┬───────────┘
+│
+│ Events
+│
+┌────────▼─────────┐
+│ │
+│ Integration Hub │
+│ │
+└──┬──────┬────┬───┘
+│ │ │
+┌───────────────┘ │ └──────────────┐
+│ │ │
+┌────────▼─────────┐ ┌────────▼─────────┐ ┌───────▼────────┐
+│ │ │ │ │ │
+│ Direct Platform │ │ Webhooks │ │ Automation │
+│ Integrations │ │ │ │ Platforms │
+│ │ │ │ │ │
+└──┬──────┬────────┘ └───────┬──────────┘ └──┬────────┬───┘
+│ │ │ │ │
+┌─────▼─┐ ┌──▼────┐ ┌─────▼─────┐ ┌───▼───┐ ┌──▼────┐
+│ │ │ │ │ │ │ │ │ │
+│ Slack │ │ Teams │ │ Custom │ │ Zapier│ │Make.com│
+│ │ │ │ │ Webhooks │ │ │ │ │
+└───────┘ └───────┘ └───────────┘ └───────┘ └───────┘
+&lt;/code>&lt;/pre>&lt;h2 id="success-metrics-and-kpis">Success Metrics and KPIs&lt;/h2>
+&lt;ul>
+&lt;li>&lt;strong>Integration Adoption Rate&lt;/strong>: 50% of users configuring at least one integration&lt;/li>
+&lt;li>&lt;strong>Notification Delivery&lt;/strong>: 99.9% successful delivery of notifications&lt;/li>
+&lt;li>&lt;strong>Integration Platform Coverage&lt;/strong>: Support for 5+ major platforms&lt;/li>
+&lt;li>&lt;strong>User Satisfaction&lt;/strong>: 90%+ approval rating for integration features&lt;/li>
+&lt;li>&lt;strong>Time to Value&lt;/strong>: &amp;lt;10 minutes to set up first integration&lt;/li>
+&lt;/ul>
+&lt;h2 id="timeline-summary">Timeline Summary&lt;/h2>
+&lt;ul>
+&lt;li>&lt;strong>Q3 2025&lt;/strong>: Core webhook architecture (10 weeks)&lt;/li>
+&lt;li>&lt;strong>Q4 2025&lt;/strong>: Direct platform integrations (12 weeks)&lt;/li>
+&lt;li>&lt;strong>Q1 2026&lt;/strong>: Integration hub support (10 weeks)&lt;/li>
+&lt;li>&lt;strong>Q2 2026&lt;/strong>: Advanced integration features (12 weeks)&lt;/li>
+&lt;/ul>
+&lt;h2 id="resource-requirements">Resource Requirements&lt;/h2>
+&lt;ul>
+&lt;li>&lt;strong>Development&lt;/strong>: 2 developers (part-time)&lt;/li>
+&lt;li>&lt;strong>Design&lt;/strong>: 1 designer for UI components&lt;/li>
+&lt;li>&lt;strong>Documentation&lt;/strong>: Technical writer for integration guides&lt;/li>
+&lt;li>&lt;strong>Testing&lt;/strong>: QA engineer for cross-platform testing&lt;/li>
+&lt;li>&lt;strong>External Services&lt;/strong>: Development accounts for Slack, Zapier, etc.&lt;/li>
+&lt;/ul>
+&lt;h2 id="future-expansion-possibilities">Future Expansion Possibilities&lt;/h2>
+&lt;ul>
+&lt;li>&lt;strong>ChatOps Integration&lt;/strong>: Command CloudSnooze directly from chat platforms&lt;/li>
+&lt;li>&lt;strong>Voice Assistant Integration&lt;/strong>: Alexa and Google Assistant skills&lt;/li>
+&lt;li>&lt;strong>Mobile Push Notifications&lt;/strong>: Direct push to CloudSnooze mobile app&lt;/li>
+&lt;li>&lt;strong>Custom Scripting&lt;/strong>: Execute custom scripts on events&lt;/li>
+&lt;li>&lt;strong>Incident Management&lt;/strong>: Integration with PagerDuty, OpsGenie, etc.&lt;/li>
+&lt;li>&lt;strong>Analytics Platform&lt;/strong>: Datadog, New Relic, Grafana integrations&lt;/li>
 &lt;/ul></description></item><item><title>Docs:</title><link>https://cloudsnooze.io/docs/design/overview/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://cloudsnooze.io/docs/design/overview/</guid><description>
 &lt;!--
 Copyright 2025 Scott Friedman and CloudSnooze Contributors
@@ -3356,7 +3715,18 @@ SPDX-License-Identifier: Apache-2.0
 &lt;li>Test and document cross-cloud functionality&lt;/li>
 &lt;/ul>
 &lt;ol start="12">
-&lt;li>&lt;strong>Advanced Features&lt;/strong>
+&lt;li>
+&lt;p>&lt;strong>External Integration Framework&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Implement webhook system for event notifications&lt;/li>
+&lt;li>Add direct integrations with Slack and Microsoft Teams&lt;/li>
+&lt;li>Develop connectors for automation platforms (Zapier, Make.com)&lt;/li>
+&lt;li>Create extensible API for third-party systems&lt;/li>
+&lt;li>See &lt;a href="design/integration-roadmap.md">Integration Roadmap&lt;/a> for details&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Advanced Features&lt;/strong>&lt;/p>
 &lt;ul>
 &lt;li>Implement predictive idle detection&lt;/li>
 &lt;li>Add scheduled operation policies&lt;/li>
