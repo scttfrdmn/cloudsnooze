@@ -25,6 +25,8 @@ CloudSnooze is a tool for automatically stopping idle cloud instances to save co
   <img src="https://img.shields.io/badge/architecture-x86__64%20%7C%20ARM64-green" alt="Architecture">
   <img src="https://img.shields.io/badge/cloud-AWS-FF9900?logo=amazon-aws" alt="Cloud Support">
   <img src="https://img.shields.io/badge/status-alpha-red" alt="Status">
+  <a href="https://github.com/scttfrdmn/cloudsnooze/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/scttfrdmn/cloudsnooze/build.yml?branch=main&logo=github" alt="Build Status"></a>
+  <a href="https://github.com/scttfrdmn/cloudsnooze/graphs/contributors"><img src="https://img.shields.io/github/contributors/scttfrdmn/cloudsnooze" alt="Contributors"></a>
 </p>
 
 ## How It Works
