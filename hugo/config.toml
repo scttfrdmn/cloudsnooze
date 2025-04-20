@@ -11,6 +11,16 @@ theme = 'docsy'
   # Docsy theme parameters
   time_format_default = "Jan 2, 2006"
   time_format_blog = "Jan 2, 2006"
+  
+  # Logo configuration
+  [params.ui]
+    navbar_logo = true
+    navbar_logo_color = true
+    
+  [params.logos]
+    # Logo /images/logo.png set in assets/ will override this
+    logo = "/images/cloudsnooze_logo.png"
+    icon = "/favicon.png"
 
 [menu]
   [[menu.main]]

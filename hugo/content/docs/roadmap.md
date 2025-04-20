@@ -76,13 +76,27 @@ This document outlines the planned development roadmap for CloudSnooze. The road
 
 ### Phase 4: Expansion
 
-9. **Expand Cloud Provider Support**
+9. **Plugin Framework Implementation**
+   - Create plugin architecture for extensible idle detection
+   - Develop plugin manager for discovery and lifecycle management
+   - Implement both native Go and external process plugins
+   - Provide SDK and examples for plugin developers
+   - See [Plugin Architecture](design/plugin-architecture.md) for details
+
+10. **Event-Driven Plugin Framework**
+   - Implement cloud event monitoring (AWS Spot interrupts, etc.)
+   - Develop event dispatch and handling system
+   - Create plugins for graceful shutdowns and data preservation
+   - Add prioritized event handling for critical operations
+   - See [Event Framework Roadmap](design/plugin-event-roadmap.md) for details
+
+11. **Expand Cloud Provider Support**
    - Add GCP integration
    - Implement Azure support
    - Create abstraction layer for multi-cloud deployments
    - Test and document cross-cloud functionality
 
-10. **Advanced Features**
+12. **Advanced Features**
     - Implement predictive idle detection
     - Add scheduled operation policies
     - Create cost savings reports
@@ -90,11 +104,24 @@ This document outlines the planned development roadmap for CloudSnooze. The road
 
 ## Future Considerations
 
-- Multi-instance coordination
-- Cost optimization suggestions
-- Instance right-sizing recommendations
+- Multi-instance coordination and orchestrated shutdowns
+- Cost optimization suggestions and automatic instance bidding
+- Instance right-sizing recommendations based on usage patterns
 - Integration with cost management tools
 - Mobile app for remote monitoring and control
+- REST API for third-party integrations
+- Webhook notifications for important events
+- Team collaboration with permission levels
+- Machine learning for predictive idle detection and event forecasting
+- Infrastructure as Code integration (Terraform, CloudFormation)
+- Tagged instance groups with different policies
+- Instance resume functionality
+- Cost analytics dashboard
+- Advanced event correlation for complex cloud environments
+- Plugin marketplace with rating system
+- Cross-instance event propagation for distributed systems
+- Custom event source plugins for application-specific monitoring
+- Automated application-aware recovery after spot interruptions
 
 ## Contributing
 
@@ -102,6 +129,6 @@ If you're interested in contributing to CloudSnooze, please focus on the tasks i
 
 ## Roadmap Status
 
-This roadmap was last updated on: April 19, 2025
+This roadmap was last updated on: April 20, 2025
 
 Please note that this roadmap is subject to change based on user feedback and development priorities.

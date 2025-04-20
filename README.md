@@ -1,8 +1,8 @@
-# CloudSnooze
-
 <p align="center">
-  <img src="docs/images/logo-placeholder.png" alt="CloudSnooze Logo" width="200"/>
+  <img src="docs/images/cloudsnooze_logo.png" alt="CloudSnooze Logo" width="300"/>
 </p>
+
+# CloudSnooze
 
 <p align="center">
   <strong>Automatically stop idle cloud instances and save costs</strong>
