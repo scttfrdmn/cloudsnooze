@@ -23,7 +23,7 @@ CloudSnooze is a tool for automatically stopping idle cloud instances to save co
   <a href="https://go.dev/dl/"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go" alt="Go Version"></a>
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS-lightgrey" alt="Platform">
   <img src="https://img.shields.io/badge/architecture-x86__64%20%7C%20ARM64-green" alt="Architecture">
-  <img src="https://img.shields.io/badge/cloud-AWS%20%7C%20GCP%20%7C%20Azure-4285F4" alt="Cloud Support">
+  <img src="https://img.shields.io/badge/cloud-AWS-FF9900?logo=amazon-aws" alt="Cloud Support">
   <img src="https://img.shields.io/badge/status-alpha-red" alt="Status">
 </p>
 
