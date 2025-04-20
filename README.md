@@ -40,7 +40,7 @@ The system consists of three components:
 3. **GUI (`snooze-gui`)** - Graphical interface for visual monitoring
 
 <p align="center">
-  <img src="docs/images/workflow-placeholder.png" alt="CloudSnooze Workflow" width="600"/>
+  <img src="docs/images/cloudsnooze-workflow.svg" alt="CloudSnooze Workflow" width="700"/>
 </p>
 
 ## Installation

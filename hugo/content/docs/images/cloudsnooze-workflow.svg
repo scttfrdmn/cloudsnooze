@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="800" height="400" xmlns="http://www.w3.org/2000/svg">
+  <!-- Styles -->
+  <style>
+    .title { font-family: Arial; font-size: 18px; font-weight: bold; fill: #333; }
+    .label { font-family: Arial; font-size: 14px; fill: #333; }
+    .small-label { font-family: Arial; font-size: 12px; fill: #555; }
+    .arrow { stroke: #555; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+    .box { fill: white; stroke: #999; stroke-width: 2; rx: 5; ry: 5; }
+    .cloud-box { fill: #f0f7ff; stroke: #3498db; stroke-width: 2; rx: 10; ry: 10; }
+    .resource-box { fill: #e8f4f2; stroke: #2ecc71; stroke-width: 2; rx: 5; ry: 5; }
+    .decision-box { fill: #fff8e8; stroke: #f39c12; stroke-width: 2; rx: 5; ry: 5; }
+    .action-box { fill: #ffe8e8; stroke: #e74c3c; stroke-width: 2; rx: 5; ry: 5; }
+    .component-box { fill: #f0e8ff; stroke: #9b59b6; stroke-width: 2; rx: 5; ry: 5; }
+    .dashed { stroke-dasharray: 5,5; }
+  </style>
+  
+  <!-- Arrow Marker -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#555" />
+    </marker>
+  </defs>
+  
+  <!-- Title -->
+  <text x="400" y="30" class="title" text-anchor="middle">CloudSnooze Workflow</text>
+  
+  <!-- Cloud Instance -->
+  <rect x="80" y="70" width="150" height="80" class="cloud-box" />
+  <text x="155" y="100" class="label" text-anchor="middle">Cloud Instance</text>
+  <text x="155" y="125" class="small-label" text-anchor="middle">(AWS, GCP, Azure)</text>
+  
+  <!-- Resource Monitoring -->
+  <rect x="300" y="60" width="200" height="100" class="resource-box" />
+  <text x="400" y="85" class="label" text-anchor="middle">Resource Monitoring</text>
+  <text x="400" y="110" class="small-label" text-anchor="middle">CPU: 3%</text>
+  <text x="400" y="130" class="small-label" text-anchor="middle">Memory: 8%</text>
+  <text x="400" y="150" class="small-label" text-anchor="middle">Network, Disk, GPU, Input</text>
+  
+  <!-- Threshold Decision -->
+  <rect x="300" y="200" width="200" height="80" class="decision-box" />
+  <text x="400" y="225" class="label" text-anchor="middle">Threshold Evaluation</text>
+  <text x="400" y="250" class="small-label" text-anchor="middle">All metrics below threshold</text>
+  <text x="400" y="270" class="small-label" text-anchor="middle">for naptime (30 min)</text>
+  
+  <!-- Instance Stop Action -->
+  <rect x="80" y="200" width="150" height="80" class="action-box" />
+  <text x="155" y="225" class="label" text-anchor="middle">Stop Instance</text>
+  <text x="155" y="250" class="small-label" text-anchor="middle">Tag with reason</text>
+  <text x="155" y="270" class="small-label" text-anchor="middle">Log event</text>
+  
+  <!-- Arrows -->
+  <path d="M230 110 H 300" class="arrow" />
+  <path d="M400 160 V 200" class="arrow" />
+  <path d="M300 240 H 230" class="arrow" />
+  <path d="M155 70 V 50 H 600 V 330 H 155 V 280" class="arrow dashed" />
+  <text x="500" y="45" class="small-label">Monitoring resumes when instance starts</text>
+  
+  <!-- Components -->
+  <rect x="580" y="70" width="150" height="60" class="component-box" />
+  <text x="655" y="95" class="label" text-anchor="middle">Daemon (snoozed)</text>
+  <text x="655" y="115" class="small-label" text-anchor="middle">Core monitoring service</text>
+  
+  <rect x="580" y="160" width="150" height="60" class="component-box" />
+  <text x="655" y="185" class="label" text-anchor="middle">CLI (snooze)</text>
+  <text x="655" y="205" class="small-label" text-anchor="middle">Command interface</text>
+  
+  <rect x="580" y="250" width="150" height="60" class="component-box" />
+  <text x="655" y="275" class="label" text-anchor="middle">GUI (snooze-gui)</text>
+  <text x="655" y="295" class="small-label" text-anchor="middle">Visual monitoring</text>
+  
+  <!-- Connection lines -->
+  <path d="M500 100 H 580" class="arrow" />
+  <path d="M500 185 H 580" class="arrow dashed" />
+  <path d="M500 270 H 580" class="arrow dashed" />
+  
+  <!-- Footer -->
+  <text x="400" y="360" class="small-label" text-anchor="middle">CloudSnooze saves costs by automatically stopping idle cloud instances</text>
+  <text x="400" y="380" class="small-label" text-anchor="middle">based on comprehensive resource monitoring and configurable thresholds</text>
+</svg>

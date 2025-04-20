@@ -17,6 +17,14 @@ SPDX-License-Identifier: Apache-2.0
 
 CloudSnooze is a tool for automatically stopping idle cloud instances to save costs. The system monitors various system metrics (CPU, memory, network, disk I/O, user activity, GPU usage) and stops instances when they remain below specified thresholds for a defined period.
 
+## How It Works
+
+CloudSnooze monitors system resource usage and automatically stops instances when all metrics remain below specified thresholds for a defined period (the "naptime"). This saves costs by ensuring you only pay for compute resources when they're actually needed.
+
+<p align="center">
+  <img src="/images/cloudsnooze-workflow.svg" alt="CloudSnooze Workflow" width="700"/>
+</p>
+
 ## Key Components
 
 1. **Daemon (`snoozed`)**: A Go service that:
