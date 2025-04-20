@@ -1029,7 +1029,1070 @@ SPDX-License-Identifier: Apache-2.0
 &lt;li>Wake-up scheduling for predictable instance availability&lt;/li>
 &lt;li>Integration with cloud provider billing APIs for cost tracking&lt;/li>
 &lt;li>Advanced prediction of idle periods based on historical patterns&lt;/li>
-&lt;/ul></description></item><item><title>Docs:</title><link>https://cloudsnooze.io/docs/integration/api-reference/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://cloudsnooze.io/docs/integration/api-reference/</guid><description>
+&lt;/ul></description></item><item><title>Docs:</title><link>https://cloudsnooze.io/docs/design/plugin-architecture/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://cloudsnooze.io/docs/design/plugin-architecture/</guid><description>
+&lt;!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
+&lt;h1 id="cloudsnooze-plugin-architecture">CloudSnooze Plugin Architecture&lt;/h1>
+&lt;p>This document describes the technical architecture for the CloudSnooze Plugin System, which extends CloudSnooze&amp;rsquo;s idle detection capabilities through a flexible plugin framework.&lt;/p>
+&lt;h2 id="architecture-overview">Architecture Overview&lt;/h2>
+&lt;p>The CloudSnooze Plugin System uses a hybrid approach combining:&lt;/p>
+&lt;ol>
+&lt;li>&lt;strong>Native Go Plugins&lt;/strong>: For performance-critical, trusted plugins&lt;/li>
+&lt;li>&lt;strong>External Process Plugins&lt;/strong>: For third-party, language-agnostic plugins with stronger isolation&lt;/li>
+&lt;/ol>
+&lt;p>This dual approach balances performance, security, and flexibility while enabling a rich ecosystem of extensions.&lt;/p>
+&lt;pre tabindex="0">&lt;code>┌─────────────────────────────────────────────────────────────────┐
+│ CloudSnooze │
+│ │
+│ ┌───────────────┐ ┌───────────────┐ ┌───────────────┐ │
+│ │ Core Monitors │ │ Plugin Manager │ │ Event Manager │ │
+│ └───────┬───────┘ └───────┬───────┘ └───────┬───────┘ │
+│ │ │ │ │
+│ │ ▼ │ │
+│ │ ┌───────────────┐ │ │
+│ │ │Plugin Registry │ │ │
+│ │ └───────┬───────┘ │ │
+│ │ │ │ │
+└──────────┼─────────────────────┼─────────────────────┼──────────┘
+│ │ │
+▼ ▼ ▼
+┌─────────────┐ ┌─────────────────────┐ ┌─────────────┐
+│ System │ │ │ │ Cloud │
+│ Metrics │ ▼ ▼ │ Events │
+└─────────────┘ ┌─────────┐ ┌──────────────┐ │
+│ Native │◄───────┤ External │◄─────────┘
+│ Plugins │ │ Plugins │
+└────┬────┘ └──────┬───────┘
+│ │
+│ ▼
+│ ┌──────────────┐
+└───────────►│ IPC Protocol │
+└──────────────┘
+&lt;/code>&lt;/pre>&lt;h2 id="core-components">Core Components&lt;/h2>
+&lt;h3 id="1-plugin-interface">1. Plugin Interface&lt;/h3>
+&lt;p>All plugins must implement this interface:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-go" data-lang="go">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">// SnoozePluginInterface defines the contract all plugins must implement
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>&lt;span style="color:#000;font-weight:bold">type&lt;/span> SnoozePluginInterface &lt;span style="color:#000;font-weight:bold">interface&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Info returns plugin metadata
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> &lt;span style="color:#900;font-weight:bold">Info&lt;/span>() PluginInfo
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// CheckIdle determines if the system is idle according to this plugin
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> &lt;span style="color:#998;font-style:italic">// Returns: (isIdle bool, idleReason string, error)
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> &lt;span style="color:#900;font-weight:bold">CheckIdle&lt;/span>(metrics SystemMetrics) (&lt;span style="color:#458;font-weight:bold">bool&lt;/span>, &lt;span style="color:#458;font-weight:bold">string&lt;/span>, &lt;span style="color:#458;font-weight:bold">error&lt;/span>)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Configure allows runtime configuration of the plugin
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> &lt;span style="color:#900;font-weight:bold">Configure&lt;/span>(config &lt;span style="color:#000;font-weight:bold">map&lt;/span>[&lt;span style="color:#458;font-weight:bold">string&lt;/span>]&lt;span style="color:#000;font-weight:bold">interface&lt;/span>{}) &lt;span style="color:#458;font-weight:bold">error&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Initialize sets up the plugin with initial configuration
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> &lt;span style="color:#900;font-weight:bold">Initialize&lt;/span>() &lt;span style="color:#458;font-weight:bold">error&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Shutdown allows plugins to clean up resources
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> &lt;span style="color:#900;font-weight:bold">Shutdown&lt;/span>() &lt;span style="color:#458;font-weight:bold">error&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="2-plugin-manager">2. Plugin Manager&lt;/h3>
+&lt;p>The Plugin Manager handles:&lt;/p>
+&lt;ul>
+&lt;li>Plugin discovery and loading&lt;/li>
+&lt;li>Plugin lifecycle management (init, shutdown)&lt;/li>
+&lt;li>Plugin execution and error handling&lt;/li>
+&lt;li>Configuration management&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-go" data-lang="go">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">type&lt;/span> PluginManager &lt;span style="color:#000;font-weight:bold">struct&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Loaded plugins
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> plugins &lt;span style="color:#000;font-weight:bold">map&lt;/span>[&lt;span style="color:#458;font-weight:bold">string&lt;/span>]SnoozePluginInterface
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Plugin execution statistics
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> stats &lt;span style="color:#000;font-weight:bold">map&lt;/span>[&lt;span style="color:#458;font-weight:bold">string&lt;/span>]&lt;span style="color:#000;font-weight:bold">*&lt;/span>PluginStats
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Configuration
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> config PluginManagerConfig
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Process manager for external plugins
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> procManager &lt;span style="color:#000;font-weight:bold">*&lt;/span>ProcessManager
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">func&lt;/span> (pm &lt;span style="color:#000;font-weight:bold">*&lt;/span>PluginManager) &lt;span style="color:#900;font-weight:bold">LoadPlugin&lt;/span>(path &lt;span style="color:#458;font-weight:bold">string&lt;/span>) &lt;span style="color:#458;font-weight:bold">error&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">func&lt;/span> (pm &lt;span style="color:#000;font-weight:bold">*&lt;/span>PluginManager) &lt;span style="color:#900;font-weight:bold">UnloadPlugin&lt;/span>(name &lt;span style="color:#458;font-weight:bold">string&lt;/span>) &lt;span style="color:#458;font-weight:bold">error&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">func&lt;/span> (pm &lt;span style="color:#000;font-weight:bold">*&lt;/span>PluginManager) &lt;span style="color:#900;font-weight:bold">EnablePlugin&lt;/span>(name &lt;span style="color:#458;font-weight:bold">string&lt;/span>) &lt;span style="color:#458;font-weight:bold">error&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">func&lt;/span> (pm &lt;span style="color:#000;font-weight:bold">*&lt;/span>PluginManager) &lt;span style="color:#900;font-weight:bold">DisablePlugin&lt;/span>(name &lt;span style="color:#458;font-weight:bold">string&lt;/span>) &lt;span style="color:#458;font-weight:bold">error&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">func&lt;/span> (pm &lt;span style="color:#000;font-weight:bold">*&lt;/span>PluginManager) &lt;span style="color:#900;font-weight:bold">ConfigurePlugin&lt;/span>(name &lt;span style="color:#458;font-weight:bold">string&lt;/span>, config &lt;span style="color:#000;font-weight:bold">map&lt;/span>[&lt;span style="color:#458;font-weight:bold">string&lt;/span>]&lt;span style="color:#000;font-weight:bold">interface&lt;/span>{}) &lt;span style="color:#458;font-weight:bold">error&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">func&lt;/span> (pm &lt;span style="color:#000;font-weight:bold">*&lt;/span>PluginManager) &lt;span style="color:#900;font-weight:bold">CheckAllPlugins&lt;/span>(metrics SystemMetrics) (&lt;span style="color:#000;font-weight:bold">map&lt;/span>[&lt;span style="color:#458;font-weight:bold">string&lt;/span>]PluginResult, &lt;span style="color:#458;font-weight:bold">error&lt;/span>)
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="3-plugin-metadata">3. Plugin Metadata&lt;/h3>
+&lt;p>Plugin metadata provides information about each plugin:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-go" data-lang="go">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">type&lt;/span> PluginInfo &lt;span style="color:#000;font-weight:bold">struct&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Basic plugin information
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Name &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Plugin identifier
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> DisplayName &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Human-readable name
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Version &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Semver version
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Author &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Author information
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Description &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Plugin description
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Category &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Plugin category
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Tags []&lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Searchable tags
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Plugin source information
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Repository &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Source code location
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Homepage &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Documentation URL
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Official &lt;span style="color:#458;font-weight:bold">bool&lt;/span> &lt;span style="color:#998;font-style:italic">// If part of official repository
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Configuration and requirements
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> ConfigSchema &lt;span style="color:#000;font-weight:bold">map&lt;/span>[&lt;span style="color:#458;font-weight:bold">string&lt;/span>]ConfigField &lt;span style="color:#998;font-style:italic">// Configuration schema
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Dependencies []Dependency &lt;span style="color:#998;font-style:italic">// Required dependencies
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> MinHostVersion &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Minimum CloudSnooze version
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Plugin implementation details
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Type PluginType &lt;span style="color:#998;font-style:italic">// Native/External
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Language &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Implementation language
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> ProcessModel &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Execution model
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">type&lt;/span> ConfigField &lt;span style="color:#000;font-weight:bold">struct&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Data type (string, int, bool, etc.)
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Description &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Field description
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Default &lt;span style="color:#000;font-weight:bold">interface&lt;/span>{} &lt;span style="color:#998;font-style:italic">// Default value
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Required &lt;span style="color:#458;font-weight:bold">bool&lt;/span> &lt;span style="color:#998;font-style:italic">// If required
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Constraints &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Validation constraints
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">type&lt;/span> Dependency &lt;span style="color:#000;font-weight:bold">struct&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Name &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Dependency name
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Version &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Version constraint
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="4-plugin-registry">4. Plugin Registry&lt;/h3>
+&lt;p>The registry manages available plugins:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-go" data-lang="go">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">type&lt;/span> PluginRegistry &lt;span style="color:#000;font-weight:bold">struct&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Official plugins
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> OfficialPlugins []PluginInfo
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Community plugins
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> CommunityPlugins []PluginInfo
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// External repositories
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> ExternalRepositories []RepositoryInfo
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">type&lt;/span> RepositoryInfo &lt;span style="color:#000;font-weight:bold">struct&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Name &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Repository name
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> URL &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Repository URL
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Description &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Repository description
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Trusted &lt;span style="color:#458;font-weight:bold">bool&lt;/span> &lt;span style="color:#998;font-style:italic">// If trusted
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="5-ipc-protocol-external-plugins">5. IPC Protocol (External Plugins)&lt;/h3>
+&lt;p>External plugins communicate using a simple JSON-RPC protocol:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-json" data-lang="json">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">// Request format (from CloudSnooze to plugin)
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;method&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;CheckIdle&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;params&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;metrics&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;cpu_usage&amp;#34;&lt;/span>: &lt;span style="color:#099">1.5&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;memory_usage&amp;#34;&lt;/span>: &lt;span style="color:#099">25.0&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;network_traffic&amp;#34;&lt;/span>: &lt;span style="color:#099">0.1&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;disk_io&amp;#34;&lt;/span>: &lt;span style="color:#099">0.5&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;gpu_usage&amp;#34;&lt;/span>: &lt;span style="color:#099">0.0&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;timestamp&amp;#34;&lt;/span>: &lt;span style="color:#099">1650000000&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;id&amp;#34;&lt;/span>: &lt;span style="color:#099">12345&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">// Response format (from plugin to CloudSnooze)
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;result&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;is_idle&amp;#34;&lt;/span>: &lt;span style="color:#000;font-weight:bold">true&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;reason&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;Database has no active connections&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;details&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;connection_count&amp;#34;&lt;/span>: &lt;span style="color:#099">0&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;last_query_timestamp&amp;#34;&lt;/span>: &lt;span style="color:#099">1649999000&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;id&amp;#34;&lt;/span>: &lt;span style="color:#099">12345&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="plugin-types">Plugin Types&lt;/h2>
+&lt;h3 id="1-native-go-plugins">1. Native Go Plugins&lt;/h3>
+&lt;p>Native plugins are compiled Go packages loaded directly into the CloudSnooze process:&lt;/p>
+&lt;ul>
+&lt;li>Higher performance&lt;/li>
+&lt;li>Direct memory access&lt;/li>
+&lt;li>Type safety&lt;/li>
+&lt;li>Must be compiled against the exact Go version&lt;/li>
+&lt;/ul>
+&lt;p>Example:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-go" data-lang="go">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">// mysql_monitor.go
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>&lt;span style="color:#000;font-weight:bold">package&lt;/span> main
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">import&lt;/span> &lt;span style="color:#d14">&amp;#34;github.com/scttfrdmn/cloudsnooze/plugin&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">type&lt;/span> MySQLMonitor &lt;span style="color:#000;font-weight:bold">struct&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> connectionThreshold &lt;span style="color:#458;font-weight:bold">int&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> dsn &lt;span style="color:#458;font-weight:bold">string&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">func&lt;/span> (m &lt;span style="color:#000;font-weight:bold">*&lt;/span>MySQLMonitor) &lt;span style="color:#900;font-weight:bold">Info&lt;/span>() plugin.PluginInfo {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> plugin.PluginInfo{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Name: &lt;span style="color:#d14">&amp;#34;mysql-monitor&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> DisplayName: &lt;span style="color:#d14">&amp;#34;MySQL Connection Monitor&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// ... additional metadata
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">func&lt;/span> (m &lt;span style="color:#000;font-weight:bold">*&lt;/span>MySQLMonitor) &lt;span style="color:#900;font-weight:bold">CheckIdle&lt;/span>(metrics plugin.SystemMetrics) (&lt;span style="color:#458;font-weight:bold">bool&lt;/span>, &lt;span style="color:#458;font-weight:bold">string&lt;/span>, &lt;span style="color:#458;font-weight:bold">error&lt;/span>) {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Check if MySQL is idle based on connection count
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> connections, err &lt;span style="color:#000;font-weight:bold">:=&lt;/span> m.&lt;span style="color:#900;font-weight:bold">getConnectionCount&lt;/span>()
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> err &lt;span style="color:#000;font-weight:bold">!=&lt;/span> &lt;span style="color:#000;font-weight:bold">nil&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#000;font-weight:bold">false&lt;/span>, &lt;span style="color:#d14">&amp;#34;&amp;#34;&lt;/span>, err
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> connections &amp;lt; m.connectionThreshold {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#000;font-weight:bold">true&lt;/span>, fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;MySQL has only %d active connections (below threshold %d)&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> connections, m.connectionThreshold), &lt;span style="color:#000;font-weight:bold">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#000;font-weight:bold">false&lt;/span>, &lt;span style="color:#d14">&amp;#34;&amp;#34;&lt;/span>, &lt;span style="color:#000;font-weight:bold">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">// Implementation of other interface methods...
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">// This is required for Go plugins
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>&lt;span style="color:#000;font-weight:bold">var&lt;/span> Plugin MySQLMonitor
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="2-external-process-plugins">2. External Process Plugins&lt;/h3>
+&lt;p>External plugins run as separate processes and can be written in any language:&lt;/p>
+&lt;ul>
+&lt;li>Strong isolation&lt;/li>
+&lt;li>Language-agnostic&lt;/li>
+&lt;li>Easier debugging&lt;/li>
+&lt;li>Potentially higher resource usage&lt;/li>
+&lt;/ul>
+&lt;p>Example (Python):&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-python" data-lang="python">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">#!/usr/bin/env python3&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic"># redis_monitor.py&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">import&lt;/span> &lt;span style="color:#555">json&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">import&lt;/span> &lt;span style="color:#555">sys&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">import&lt;/span> &lt;span style="color:#555">redis&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">class&lt;/span> &lt;span style="color:#458;font-weight:bold">RedisMonitor&lt;/span>:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">def&lt;/span> __init__(&lt;span style="color:#999">self&lt;/span>):
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#999">self&lt;/span>&lt;span style="color:#000;font-weight:bold">.&lt;/span>connection_threshold &lt;span style="color:#000;font-weight:bold">=&lt;/span> &lt;span style="color:#099">5&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#999">self&lt;/span>&lt;span style="color:#000;font-weight:bold">.&lt;/span>redis_url &lt;span style="color:#000;font-weight:bold">=&lt;/span> &lt;span style="color:#d14">&amp;#34;redis://localhost:6379&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">def&lt;/span> &lt;span style="color:#900;font-weight:bold">info&lt;/span>(&lt;span style="color:#999">self&lt;/span>):
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;name&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;redis-monitor&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;display_name&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;Redis Connection Monitor&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;version&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;1.0.0&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;author&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;CloudSnooze Team&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;description&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;Monitors Redis for active connections&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic"># ... additional metadata&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">def&lt;/span> &lt;span style="color:#900;font-weight:bold">check_idle&lt;/span>(&lt;span style="color:#999">self&lt;/span>, metrics):
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">try&lt;/span>:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> r &lt;span style="color:#000;font-weight:bold">=&lt;/span> redis&lt;span style="color:#000;font-weight:bold">.&lt;/span>from_url(&lt;span style="color:#999">self&lt;/span>&lt;span style="color:#000;font-weight:bold">.&lt;/span>redis_url)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> info &lt;span style="color:#000;font-weight:bold">=&lt;/span> r&lt;span style="color:#000;font-weight:bold">.&lt;/span>info()
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> connected_clients &lt;span style="color:#000;font-weight:bold">=&lt;/span> info&lt;span style="color:#000;font-weight:bold">.&lt;/span>get(&lt;span style="color:#d14">&amp;#39;connected_clients&amp;#39;&lt;/span>, &lt;span style="color:#099">0&lt;/span>)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> connected_clients &lt;span style="color:#000;font-weight:bold">&amp;lt;&lt;/span> &lt;span style="color:#999">self&lt;/span>&lt;span style="color:#000;font-weight:bold">.&lt;/span>connection_threshold:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;is_idle&amp;#34;&lt;/span>: &lt;span style="color:#000;font-weight:bold">True&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;reason&amp;#34;&lt;/span>: &lt;span style="color:#d14">f&lt;/span>&lt;span style="color:#d14">&amp;#34;Redis has only &lt;/span>&lt;span style="color:#d14">{&lt;/span>connected_clients&lt;span style="color:#d14">}&lt;/span>&lt;span style="color:#d14"> connections (below threshold &lt;/span>&lt;span style="color:#d14">{&lt;/span>&lt;span style="color:#999">self&lt;/span>&lt;span style="color:#000;font-weight:bold">.&lt;/span>connection_threshold&lt;span style="color:#d14">}&lt;/span>&lt;span style="color:#d14">)&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> {&lt;span style="color:#d14">&amp;#34;is_idle&amp;#34;&lt;/span>: &lt;span style="color:#000;font-weight:bold">False&lt;/span>, &lt;span style="color:#d14">&amp;#34;reason&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;&amp;#34;&lt;/span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">except&lt;/span> &lt;span style="color:#900;font-weight:bold">Exception&lt;/span> &lt;span style="color:#000;font-weight:bold">as&lt;/span> e:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> {&lt;span style="color:#d14">&amp;#34;error&amp;#34;&lt;/span>: &lt;span style="color:#0086b3">str&lt;/span>(e)}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">def&lt;/span> &lt;span style="color:#900;font-weight:bold">configure&lt;/span>(&lt;span style="color:#999">self&lt;/span>, config):
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> &lt;span style="color:#d14">&amp;#39;connection_threshold&amp;#39;&lt;/span> &lt;span style="color:#000;font-weight:bold">in&lt;/span> config:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#999">self&lt;/span>&lt;span style="color:#000;font-weight:bold">.&lt;/span>connection_threshold &lt;span style="color:#000;font-weight:bold">=&lt;/span> config[&lt;span style="color:#d14">&amp;#39;connection_threshold&amp;#39;&lt;/span>]
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> &lt;span style="color:#d14">&amp;#39;redis_url&amp;#39;&lt;/span> &lt;span style="color:#000;font-weight:bold">in&lt;/span> config:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#999">self&lt;/span>&lt;span style="color:#000;font-weight:bold">.&lt;/span>redis_url &lt;span style="color:#000;font-weight:bold">=&lt;/span> config[&lt;span style="color:#d14">&amp;#39;redis_url&amp;#39;&lt;/span>]
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> {&lt;span style="color:#d14">&amp;#34;success&amp;#34;&lt;/span>: &lt;span style="color:#000;font-weight:bold">True&lt;/span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic"># Main loop to handle IPC&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>monitor &lt;span style="color:#000;font-weight:bold">=&lt;/span> RedisMonitor()
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">for&lt;/span> line &lt;span style="color:#000;font-weight:bold">in&lt;/span> sys&lt;span style="color:#000;font-weight:bold">.&lt;/span>stdin:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">try&lt;/span>:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> request &lt;span style="color:#000;font-weight:bold">=&lt;/span> json&lt;span style="color:#000;font-weight:bold">.&lt;/span>loads(line)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> method &lt;span style="color:#000;font-weight:bold">=&lt;/span> request&lt;span style="color:#000;font-weight:bold">.&lt;/span>get(&lt;span style="color:#d14">&amp;#39;method&amp;#39;&lt;/span>)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> params &lt;span style="color:#000;font-weight:bold">=&lt;/span> request&lt;span style="color:#000;font-weight:bold">.&lt;/span>get(&lt;span style="color:#d14">&amp;#39;params&amp;#39;&lt;/span>, {})
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> req_id &lt;span style="color:#000;font-weight:bold">=&lt;/span> request&lt;span style="color:#000;font-weight:bold">.&lt;/span>get(&lt;span style="color:#d14">&amp;#39;id&amp;#39;&lt;/span>)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> method &lt;span style="color:#000;font-weight:bold">==&lt;/span> &lt;span style="color:#d14">&amp;#39;Info&amp;#39;&lt;/span>:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> result &lt;span style="color:#000;font-weight:bold">=&lt;/span> monitor&lt;span style="color:#000;font-weight:bold">.&lt;/span>info()
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">elif&lt;/span> method &lt;span style="color:#000;font-weight:bold">==&lt;/span> &lt;span style="color:#d14">&amp;#39;CheckIdle&amp;#39;&lt;/span>:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> result &lt;span style="color:#000;font-weight:bold">=&lt;/span> monitor&lt;span style="color:#000;font-weight:bold">.&lt;/span>check_idle(params&lt;span style="color:#000;font-weight:bold">.&lt;/span>get(&lt;span style="color:#d14">&amp;#39;metrics&amp;#39;&lt;/span>, {}))
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">elif&lt;/span> method &lt;span style="color:#000;font-weight:bold">==&lt;/span> &lt;span style="color:#d14">&amp;#39;Configure&amp;#39;&lt;/span>:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> result &lt;span style="color:#000;font-weight:bold">=&lt;/span> monitor&lt;span style="color:#000;font-weight:bold">.&lt;/span>configure(params&lt;span style="color:#000;font-weight:bold">.&lt;/span>get(&lt;span style="color:#d14">&amp;#39;config&amp;#39;&lt;/span>, {}))
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">else&lt;/span>:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> result &lt;span style="color:#000;font-weight:bold">=&lt;/span> {&lt;span style="color:#d14">&amp;#34;error&amp;#34;&lt;/span>: &lt;span style="color:#d14">f&lt;/span>&lt;span style="color:#d14">&amp;#34;Unknown method: &lt;/span>&lt;span style="color:#d14">{&lt;/span>method&lt;span style="color:#d14">}&lt;/span>&lt;span style="color:#d14">&amp;#34;&lt;/span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> response &lt;span style="color:#000;font-weight:bold">=&lt;/span> {&lt;span style="color:#d14">&amp;#34;result&amp;#34;&lt;/span>: result, &lt;span style="color:#d14">&amp;#34;id&amp;#34;&lt;/span>: req_id}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#0086b3">print&lt;/span>(json&lt;span style="color:#000;font-weight:bold">.&lt;/span>dumps(response))
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> sys&lt;span style="color:#000;font-weight:bold">.&lt;/span>stdout&lt;span style="color:#000;font-weight:bold">.&lt;/span>flush()
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">except&lt;/span> &lt;span style="color:#900;font-weight:bold">Exception&lt;/span> &lt;span style="color:#000;font-weight:bold">as&lt;/span> e:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> error_response &lt;span style="color:#000;font-weight:bold">=&lt;/span> {&lt;span style="color:#d14">&amp;#34;error&amp;#34;&lt;/span>: &lt;span style="color:#0086b3">str&lt;/span>(e), &lt;span style="color:#d14">&amp;#34;id&amp;#34;&lt;/span>: req_id &lt;span style="color:#000;font-weight:bold">if&lt;/span> &lt;span style="color:#d14">&amp;#39;req_id&amp;#39;&lt;/span> &lt;span style="color:#000;font-weight:bold">in&lt;/span> &lt;span style="color:#0086b3">locals&lt;/span>() &lt;span style="color:#000;font-weight:bold">else&lt;/span> &lt;span style="color:#000;font-weight:bold">None&lt;/span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#0086b3">print&lt;/span>(json&lt;span style="color:#000;font-weight:bold">.&lt;/span>dumps(error_response))
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> sys&lt;span style="color:#000;font-weight:bold">.&lt;/span>stdout&lt;span style="color:#000;font-weight:bold">.&lt;/span>flush()
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="event-driven-plugin-framework">Event-Driven Plugin Framework&lt;/h2>
+&lt;p>The CloudSnooze Event-Driven Plugin Framework extends the basic plugin architecture to handle bidirectional communication. This allows CloudSnooze to both receive information from plugins (idle detection) and trigger plugin actions in response to external events (such as AWS Spot instance interruption notifications).&lt;/p>
+&lt;h3 id="1-event-types">1. Event Types&lt;/h3>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-go" data-lang="go">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">// EventType identifies different kinds of events plugins can handle
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>&lt;span style="color:#000;font-weight:bold">type&lt;/span> EventType &lt;span style="color:#458;font-weight:bold">string&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">const&lt;/span> (
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Cloud provider events
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> EventSpotInterrupt EventType = &lt;span style="color:#d14">&amp;#34;cloud.spot.interrupt&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> EventInstanceTermination EventType = &lt;span style="color:#d14">&amp;#34;cloud.instance.termination&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> EventAutoscalingScale EventType = &lt;span style="color:#d14">&amp;#34;cloud.autoscaling.scale&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// System events
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> EventLowDiskSpace EventType = &lt;span style="color:#d14">&amp;#34;system.disk.low&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> EventHighCPU EventType = &lt;span style="color:#d14">&amp;#34;system.cpu.high&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> EventMemoryPressure EventType = &lt;span style="color:#d14">&amp;#34;system.memory.pressure&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Custom events
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> EventCustom EventType = &lt;span style="color:#d14">&amp;#34;custom&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>)
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="2-event-data">2. Event Data&lt;/h3>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-go" data-lang="go">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">// Event represents a structured event that can trigger plugin actions
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>&lt;span style="color:#000;font-weight:bold">type&lt;/span> Event &lt;span style="color:#000;font-weight:bold">struct&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Event metadata
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Type EventType &lt;span style="color:#998;font-style:italic">// Type of event
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Source &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Event source (e.g., &amp;#34;aws.spot-fleet&amp;#34;)
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Timestamp time.Time &lt;span style="color:#998;font-style:italic">// When the event occurred
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> ID &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#998;font-style:italic">// Unique event ID
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Event data
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Data &lt;span style="color:#000;font-weight:bold">map&lt;/span>[&lt;span style="color:#458;font-weight:bold">string&lt;/span>]&lt;span style="color:#000;font-weight:bold">interface&lt;/span>{} &lt;span style="color:#998;font-style:italic">// Event-specific data
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Severity and timing
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Severity EventSeverity &lt;span style="color:#998;font-style:italic">// Event importance
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> Deadline &lt;span style="color:#000;font-weight:bold">*&lt;/span>time.Time &lt;span style="color:#998;font-style:italic">// Optional deadline for action
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">type&lt;/span> EventSeverity &lt;span style="color:#458;font-weight:bold">int&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">const&lt;/span> (
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> SeverityInfo EventSeverity = &lt;span style="color:#099">0&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> SeverityWarning EventSeverity = &lt;span style="color:#099">1&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> SeverityUrgent EventSeverity = &lt;span style="color:#099">2&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> SeverityCritical EventSeverity = &lt;span style="color:#099">3&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>)
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="3-event-handling-interface">3. Event Handling Interface&lt;/h3>
+&lt;p>Plugins can optionally implement this interface to handle events:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-go" data-lang="go">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">// EventHandlerInterface defines methods for plugins that can handle events
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>&lt;span style="color:#000;font-weight:bold">type&lt;/span> EventHandlerInterface &lt;span style="color:#000;font-weight:bold">interface&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Required methods from base SnoozePluginInterface
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// HandleEvent processes an event and takes appropriate action
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> &lt;span style="color:#998;font-style:italic">// Returns: (handled bool, result map[string]interface{}, error)
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> &lt;span style="color:#900;font-weight:bold">HandleEvent&lt;/span>(event Event) (&lt;span style="color:#458;font-weight:bold">bool&lt;/span>, &lt;span style="color:#000;font-weight:bold">map&lt;/span>[&lt;span style="color:#458;font-weight:bold">string&lt;/span>]&lt;span style="color:#000;font-weight:bold">interface&lt;/span>{}, &lt;span style="color:#458;font-weight:bold">error&lt;/span>)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// GetSupportedEvents returns events this plugin can handle
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> &lt;span style="color:#900;font-weight:bold">GetSupportedEvents&lt;/span>() []EventType
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="4-event-processing">4. Event Processing&lt;/h3>
+&lt;p>The event processing workflow:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-go" data-lang="go">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">func&lt;/span> (pm &lt;span style="color:#000;font-weight:bold">*&lt;/span>PluginManager) &lt;span style="color:#900;font-weight:bold">HandleEvent&lt;/span>(event Event) &lt;span style="color:#458;font-weight:bold">error&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Find plugins that can handle this event
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> handlers &lt;span style="color:#000;font-weight:bold">:=&lt;/span> pm.&lt;span style="color:#900;font-weight:bold">findEventHandlers&lt;/span>(event.Type)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Sort by priority
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> pm.&lt;span style="color:#900;font-weight:bold">sortHandlersByPriority&lt;/span>(handlers)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Process through handlers until one succeeds
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> &lt;span style="color:#000;font-weight:bold">for&lt;/span> _, handler &lt;span style="color:#000;font-weight:bold">:=&lt;/span> &lt;span style="color:#000;font-weight:bold">range&lt;/span> handlers {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> handled, result, err &lt;span style="color:#000;font-weight:bold">:=&lt;/span> handler.&lt;span style="color:#900;font-weight:bold">HandleEvent&lt;/span>(event)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> err &lt;span style="color:#000;font-weight:bold">!=&lt;/span> &lt;span style="color:#000;font-weight:bold">nil&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> log.&lt;span style="color:#900;font-weight:bold">Printf&lt;/span>(&lt;span style="color:#d14">&amp;#34;Plugin %s failed to handle event: %v&amp;#34;&lt;/span>, handler.&lt;span style="color:#900;font-weight:bold">Info&lt;/span>().Name, err)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">continue&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> handled {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> log.&lt;span style="color:#900;font-weight:bold">Printf&lt;/span>(&lt;span style="color:#d14">&amp;#34;Event %s handled by plugin %s: %v&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> event.ID, handler.&lt;span style="color:#900;font-weight:bold">Info&lt;/span>().Name, result)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#000;font-weight:bold">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> fmt.&lt;span style="color:#900;font-weight:bold">Errorf&lt;/span>(&lt;span style="color:#d14">&amp;#34;no plugin successfully handled event %s&amp;#34;&lt;/span>, event.ID)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="5-example-aws-spot-instance-interrupt-handler">5. Example: AWS Spot Instance Interrupt Handler&lt;/h3>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-go" data-lang="go">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">// spot_interrupt_handler.go
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>&lt;span style="color:#000;font-weight:bold">package&lt;/span> main
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">import&lt;/span> (
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;context&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;github.com/scttfrdmn/cloudsnooze/plugin&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;os/exec&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;time&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">type&lt;/span> SpotInterruptHandler &lt;span style="color:#000;font-weight:bold">struct&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> shutdownScriptPath &lt;span style="color:#458;font-weight:bold">string&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> timeoutSeconds &lt;span style="color:#458;font-weight:bold">int&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> notified &lt;span style="color:#458;font-weight:bold">bool&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">func&lt;/span> (h &lt;span style="color:#000;font-weight:bold">*&lt;/span>SpotInterruptHandler) &lt;span style="color:#900;font-weight:bold">Info&lt;/span>() plugin.PluginInfo {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> plugin.PluginInfo{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Name: &lt;span style="color:#d14">&amp;#34;spot-interrupt-handler&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> DisplayName: &lt;span style="color:#d14">&amp;#34;AWS Spot Interrupt Handler&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Version: &lt;span style="color:#d14">&amp;#34;1.0.0&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Author: &lt;span style="color:#d14">&amp;#34;CloudSnooze Team&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Description: &lt;span style="color:#d14">&amp;#34;Handles AWS Spot instance interruption notifications&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Category: &lt;span style="color:#d14">&amp;#34;cloud-event&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Tags: []&lt;span style="color:#458;font-weight:bold">string&lt;/span>{&lt;span style="color:#d14">&amp;#34;aws&amp;#34;&lt;/span>, &lt;span style="color:#d14">&amp;#34;spot&amp;#34;&lt;/span>, &lt;span style="color:#d14">&amp;#34;interrupt&amp;#34;&lt;/span>},
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// ... additional metadata
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">func&lt;/span> (h &lt;span style="color:#000;font-weight:bold">*&lt;/span>SpotInterruptHandler) &lt;span style="color:#900;font-weight:bold">GetSupportedEvents&lt;/span>() []plugin.EventType {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> []plugin.EventType{plugin.EventSpotInterrupt}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">func&lt;/span> (h &lt;span style="color:#000;font-weight:bold">*&lt;/span>SpotInterruptHandler) &lt;span style="color:#900;font-weight:bold">HandleEvent&lt;/span>(event plugin.Event) (&lt;span style="color:#458;font-weight:bold">bool&lt;/span>, &lt;span style="color:#000;font-weight:bold">map&lt;/span>[&lt;span style="color:#458;font-weight:bold">string&lt;/span>]&lt;span style="color:#000;font-weight:bold">interface&lt;/span>{}, &lt;span style="color:#458;font-weight:bold">error&lt;/span>) {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> event.Type &lt;span style="color:#000;font-weight:bold">!=&lt;/span> plugin.EventSpotInterrupt {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#000;font-weight:bold">false&lt;/span>, &lt;span style="color:#000;font-weight:bold">nil&lt;/span>, &lt;span style="color:#000;font-weight:bold">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Already handled this event?
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> h.notified {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#000;font-weight:bold">true&lt;/span>, &lt;span style="color:#000;font-weight:bold">map&lt;/span>[&lt;span style="color:#458;font-weight:bold">string&lt;/span>]&lt;span style="color:#000;font-weight:bold">interface&lt;/span>{}{&lt;span style="color:#d14">&amp;#34;status&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;already_handled&amp;#34;&lt;/span>}, &lt;span style="color:#000;font-weight:bold">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Extract information from event
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> timeRemaining, ok &lt;span style="color:#000;font-weight:bold">:=&lt;/span> event.Data[&lt;span style="color:#d14">&amp;#34;timeRemaining&amp;#34;&lt;/span>].(&lt;span style="color:#458;font-weight:bold">int&lt;/span>)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> !ok {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> timeRemaining = &lt;span style="color:#099">120&lt;/span> &lt;span style="color:#998;font-style:italic">// Default to 2 minutes if not specified
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Set a context with deadline based on time remaining
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> ctx, cancel &lt;span style="color:#000;font-weight:bold">:=&lt;/span> context.&lt;span style="color:#900;font-weight:bold">WithTimeout&lt;/span>(context.&lt;span style="color:#900;font-weight:bold">Background&lt;/span>(),
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> time.&lt;span style="color:#900;font-weight:bold">Duration&lt;/span>(&lt;span style="color:#0086b3">min&lt;/span>(timeRemaining&lt;span style="color:#000;font-weight:bold">-&lt;/span>&lt;span style="color:#099">15&lt;/span>, h.timeoutSeconds))&lt;span style="color:#000;font-weight:bold">*&lt;/span>time.Second)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">defer&lt;/span> &lt;span style="color:#900;font-weight:bold">cancel&lt;/span>()
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Execute shutdown script
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> cmd &lt;span style="color:#000;font-weight:bold">:=&lt;/span> exec.&lt;span style="color:#900;font-weight:bold">CommandContext&lt;/span>(ctx, h.shutdownScriptPath)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> output, err &lt;span style="color:#000;font-weight:bold">:=&lt;/span> cmd.&lt;span style="color:#900;font-weight:bold">CombinedOutput&lt;/span>()
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> h.notified = &lt;span style="color:#000;font-weight:bold">true&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> result &lt;span style="color:#000;font-weight:bold">:=&lt;/span> &lt;span style="color:#000;font-weight:bold">map&lt;/span>[&lt;span style="color:#458;font-weight:bold">string&lt;/span>]&lt;span style="color:#000;font-weight:bold">interface&lt;/span>{}{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;script_output&amp;#34;&lt;/span>: &lt;span style="color:#0086b3">string&lt;/span>(output),
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;time_remaining&amp;#34;&lt;/span>: timeRemaining,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> err &lt;span style="color:#000;font-weight:bold">!=&lt;/span> &lt;span style="color:#000;font-weight:bold">nil&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> result[&lt;span style="color:#d14">&amp;#34;success&amp;#34;&lt;/span>] = &lt;span style="color:#000;font-weight:bold">false&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> result[&lt;span style="color:#d14">&amp;#34;error&amp;#34;&lt;/span>] = err.&lt;span style="color:#900;font-weight:bold">Error&lt;/span>()
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#000;font-weight:bold">true&lt;/span>, result, &lt;span style="color:#000;font-weight:bold">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> result[&lt;span style="color:#d14">&amp;#34;success&amp;#34;&lt;/span>] = &lt;span style="color:#000;font-weight:bold">true&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#000;font-weight:bold">true&lt;/span>, result, &lt;span style="color:#000;font-weight:bold">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">// Implement other SnoozePluginInterface methods...
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">// This is required for Go plugins
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>&lt;span style="color:#000;font-weight:bold">var&lt;/span> Plugin SpotInterruptHandler
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="6-event-sources">6. Event Sources&lt;/h3>
+&lt;p>CloudSnooze monitors several event sources:&lt;/p>
+&lt;ol>
+&lt;li>
+&lt;p>&lt;strong>Cloud Provider APIs&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>AWS EC2 Spot Instance Interruption Notices (via metadata service)&lt;/li>
+&lt;li>AWS Auto Scaling Group Events (via SNS/EventBridge)&lt;/li>
+&lt;li>Azure Scheduled Events API&lt;/li>
+&lt;li>GCP Preemptible VM Termination Events&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>System Event Monitoring&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Disk space thresholds&lt;/li>
+&lt;li>CPU/Memory pressure indicators&lt;/li>
+&lt;li>Network connectivity issues&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Custom Event Sources&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Custom endpoint for external events&lt;/li>
+&lt;li>Integrated applications&lt;/li>
+&lt;li>User-triggered events&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ol>
+&lt;h3 id="7-event-configuration">7. Event Configuration&lt;/h3>
+&lt;p>Events can be configured per plugin:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-json" data-lang="json">&lt;span style="display:flex;">&lt;span>{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;plugins&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;plugin_configs&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;spot-interrupt-handler&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;shutdown_script_path&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;/usr/local/bin/graceful_shutdown.sh&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;timeout_seconds&amp;#34;&lt;/span>: &lt;span style="color:#099">90&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;events&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;cloud.spot.interrupt&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;priority&amp;#34;&lt;/span>: &lt;span style="color:#099">100&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;enabled&amp;#34;&lt;/span>: &lt;span style="color:#000;font-weight:bold">true&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;database-flusher&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;db_type&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;mysql&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;connection_string&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;user:pass@tcp(localhost:3306)/mydb&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;events&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;cloud.spot.interrupt&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;priority&amp;#34;&lt;/span>: &lt;span style="color:#099">50&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;enabled&amp;#34;&lt;/span>: &lt;span style="color:#000;font-weight:bold">true&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;system.disk.low&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;priority&amp;#34;&lt;/span>: &lt;span style="color:#099">80&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;enabled&amp;#34;&lt;/span>: &lt;span style="color:#000;font-weight:bold">true&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="integration-with-cloudsnooze">Integration with CloudSnooze&lt;/h2>
+&lt;h3 id="1-system-monitor-extension">1. System Monitor Extension&lt;/h3>
+&lt;p>The System Monitor component will be extended to include plugin results:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-go" data-lang="go">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">func&lt;/span> (sm &lt;span style="color:#000;font-weight:bold">*&lt;/span>SystemMonitor) &lt;span style="color:#900;font-weight:bold">ShouldSnooze&lt;/span>() (&lt;span style="color:#458;font-weight:bold">bool&lt;/span>, &lt;span style="color:#458;font-weight:bold">string&lt;/span>) {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Check built-in monitors
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> shouldSnooze, reason &lt;span style="color:#000;font-weight:bold">:=&lt;/span> sm.&lt;span style="color:#900;font-weight:bold">checkBuiltInMonitors&lt;/span>(); shouldSnooze {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#000;font-weight:bold">true&lt;/span>, reason
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Check plugins
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> pluginResults, err &lt;span style="color:#000;font-weight:bold">:=&lt;/span> sm.pluginManager.&lt;span style="color:#900;font-weight:bold">CheckAllPlugins&lt;/span>(sm.lastMetrics)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> err &lt;span style="color:#000;font-weight:bold">!=&lt;/span> &lt;span style="color:#000;font-weight:bold">nil&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> log.&lt;span style="color:#900;font-weight:bold">Printf&lt;/span>(&lt;span style="color:#d14">&amp;#34;Error checking plugins: %v&amp;#34;&lt;/span>, err)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Evaluate plugin results
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> &lt;span style="color:#000;font-weight:bold">for&lt;/span> name, result &lt;span style="color:#000;font-weight:bold">:=&lt;/span> &lt;span style="color:#000;font-weight:bold">range&lt;/span> pluginResults {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> result.IsIdle {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#000;font-weight:bold">true&lt;/span>, fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;Plugin %s: %s&amp;#34;&lt;/span>, name, result.Reason)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#000;font-weight:bold">false&lt;/span>, &lt;span style="color:#d14">&amp;#34;&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="2-configuration-integration">2. Configuration Integration&lt;/h3>
+&lt;p>Plugin configuration will be integrated into CloudSnooze&amp;rsquo;s configuration:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-json" data-lang="json">&lt;span style="display:flex;">&lt;span>{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;cpu_threshold_percent&amp;#34;&lt;/span>: &lt;span style="color:#099">5.0&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;memory_threshold_percent&amp;#34;&lt;/span>: &lt;span style="color:#099">10.0&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;network_threshold_kbps&amp;#34;&lt;/span>: &lt;span style="color:#099">50.0&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;disk_io_threshold_kbps&amp;#34;&lt;/span>: &lt;span style="color:#099">100.0&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;naptime_minutes&amp;#34;&lt;/span>: &lt;span style="color:#099">30&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;plugins&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;enabled&amp;#34;&lt;/span>: &lt;span style="color:#000;font-weight:bold">true&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;directories&amp;#34;&lt;/span>: [
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;/etc/cloudsnooze/plugins&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;/usr/local/share/cloudsnooze/plugins&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> ],
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;external_repositories&amp;#34;&lt;/span>: [
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;name&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;community&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;url&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;https://plugins.cloudsnooze.io/community&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;trusted&amp;#34;&lt;/span>: &lt;span style="color:#000;font-weight:bold">true&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> ],
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;plugin_configs&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;mysql-monitor&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;connection_threshold&amp;#34;&lt;/span>: &lt;span style="color:#099">5&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;dsn&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;user:pass@tcp(localhost:3306)/dbname&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;redis-monitor&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;connection_threshold&amp;#34;&lt;/span>: &lt;span style="color:#099">3&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;redis_url&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;redis://localhost:6379&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="3-cli-integration">3. CLI Integration&lt;/h3>
+&lt;p>The CloudSnooze CLI will be extended with plugin management commands:&lt;/p>
+&lt;pre tabindex="0">&lt;code># Plugin management commands
+snooze plugin list # List all plugins
+snooze plugin info mysql-monitor # Show plugin details
+snooze plugin install redis-monitor # Install a plugin
+snooze plugin uninstall redis-monitor # Remove a plugin
+snooze plugin enable mysql-monitor # Enable a plugin
+snooze plugin disable mysql-monitor # Disable a plugin
+snooze plugin configure mysql-monitor # Configure a plugin
+snooze plugin update-all # Update all plugins
+snooze plugin search database # Search for plugins
+&lt;/code>&lt;/pre>&lt;h2 id="plugin-development-workflow">Plugin Development Workflow&lt;/h2>
+&lt;ol>
+&lt;li>
+&lt;p>&lt;strong>Create&lt;/strong> a new plugin&lt;/p>
+&lt;ul>
+&lt;li>Use provided templates&lt;/li>
+&lt;li>Implement the plugin interface&lt;/li>
+&lt;li>Package with metadata&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Test&lt;/strong> locally&lt;/p>
+&lt;ul>
+&lt;li>Use the provided testing framework&lt;/li>
+&lt;li>Verify against test metrics&lt;/li>
+&lt;li>Validate configuration handling&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Package&lt;/strong> for distribution&lt;/p>
+&lt;ul>
+&lt;li>Create release artifacts&lt;/li>
+&lt;li>Sign plugin (for official plugins)&lt;/li>
+&lt;li>Generate documentation&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Publish&lt;/strong> to registry&lt;/p>
+&lt;ul>
+&lt;li>Submit to official/community repository&lt;/li>
+&lt;li>Provide installation instructions&lt;/li>
+&lt;li>Include usage examples&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ol>
+&lt;h2 id="security-considerations">Security Considerations&lt;/h2>
+&lt;ol>
+&lt;li>
+&lt;p>&lt;strong>Plugin Isolation&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Native plugins run in-process (trusted code only)&lt;/li>
+&lt;li>External plugins run as separate processes&lt;/li>
+&lt;li>Resource limits enforced by ProcessManager&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Permission Model&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Plugins define required permissions&lt;/li>
+&lt;li>Users must approve permission requests&lt;/li>
+&lt;li>Granular permission control&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Verification&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Official plugins are signed and verified&lt;/li>
+&lt;li>Community plugins display trust warnings&lt;/li>
+&lt;li>Plugin hashes are verified&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Monitoring&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Plugin performance is monitored&lt;/li>
+&lt;li>Crashes/hangs are detected&lt;/li>
+&lt;li>Excessive resource usage triggers warnings&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ol>
+&lt;h2 id="future-extensions">Future Extensions&lt;/h2>
+&lt;ol>
+&lt;li>
+&lt;p>&lt;strong>Remote Plugin Execution&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Run plugins on separate servers&lt;/li>
+&lt;li>Aggregate results from multiple sources&lt;/li>
+&lt;li>Centralized management&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Plugin Marketplace&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Rating and review system&lt;/li>
+&lt;li>Download statistics&lt;/li>
+&lt;li>Featured plugins section&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Advanced Plugin Types&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Machine learning-based idle detection&lt;/li>
+&lt;li>Predictive analytics plugins&lt;/li>
+&lt;li>Cross-instance coordination plugins&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Event-Driven Plugin Actions&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Cloud provider event integration&lt;/li>
+&lt;li>Custom triggers and reactions&lt;/li>
+&lt;li>Event prioritization system&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ol></description></item><item><title>Docs:</title><link>https://cloudsnooze.io/docs/design/plugin-event-roadmap/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://cloudsnooze.io/docs/design/plugin-event-roadmap/</guid><description>
+&lt;!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
+&lt;h1 id="cloudsnooze-event-driven-plugin-framework-roadmap">CloudSnooze Event-Driven Plugin Framework Roadmap&lt;/h1>
+&lt;p>This document outlines the implementation plan for the CloudSnooze Event-Driven Plugin Framework, which enables plugins to respond to external events such as AWS Spot instance interruption notifications.&lt;/p>
+&lt;h2 id="overview">Overview&lt;/h2>
+&lt;p>The Event-Driven Plugin Framework extends CloudSnooze beyond passive monitoring to active event handling. This allows CloudSnooze to trigger appropriate actions when cloud providers or system events require rapid response.&lt;/p>
+&lt;h2 id="implementation-phases">Implementation Phases&lt;/h2>
+&lt;h3 id="phase-1-core-event-framework-q3-2025">Phase 1: Core Event Framework (Q3 2025)&lt;/h3>
+&lt;ol>
+&lt;li>
+&lt;p>&lt;strong>Event System Architecture&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Design event types, priorities, and data structures&lt;/li>
+&lt;li>Implement event subscription and dispatch mechanisms&lt;/li>
+&lt;li>Create event queue and processing pipeline&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Event Source Integration&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>AWS EC2 metadata service monitoring for Spot interrupts&lt;/li>
+&lt;li>System event sources (disk, memory, network)&lt;/li>
+&lt;li>Basic event simulation for testing&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Plugin Interface Extensions&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Extend plugin interface for event handling&lt;/li>
+&lt;li>Implement event handler registration and discovery&lt;/li>
+&lt;li>Develop event handler prioritization system&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Testing Framework&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Create event simulation tools for testing&lt;/li>
+&lt;li>Implement event processing unit tests&lt;/li>
+&lt;li>Develop plugin event handling verification system&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ol>
+&lt;h3 id="phase-2-aws-spot-instance-handler-q4-2025">Phase 2: AWS Spot Instance Handler (Q4 2025)&lt;/h3>
+&lt;ol>
+&lt;li>
+&lt;p>&lt;strong>Spot Interrupt Detection&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>EC2 instance metadata service monitoring&lt;/li>
+&lt;li>Instance termination notice parsing&lt;/li>
+&lt;li>Time-to-termination calculation&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Graceful Shutdown Framework&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Application notification system&lt;/li>
+&lt;li>Configurable shutdown sequence&lt;/li>
+&lt;li>Shutdown verification and reporting&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Official Plugins&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Database flushing plugins (MySQL, PostgreSQL, Redis)&lt;/li>
+&lt;li>Application checkpoint plugins (common frameworks)&lt;/li>
+&lt;li>VM state saving plugins&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Documentation and Examples&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Comprehensive developer guide&lt;/li>
+&lt;li>Plugin implementation examples&lt;/li>
+&lt;li>Best practices for shutdown scripting&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ol>
+&lt;h3 id="phase-3-additional-cloud-providers-q1-2026">Phase 3: Additional Cloud Providers (Q1 2026)&lt;/h3>
+&lt;ol>
+&lt;li>
+&lt;p>&lt;strong>Azure Integration&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Azure Scheduled Events API monitoring&lt;/li>
+&lt;li>VM termination event handling&lt;/li>
+&lt;li>Azure-specific plugins&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>GCP Integration&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Preemptible VM monitoring&lt;/li>
+&lt;li>GCE instance termination events&lt;/li>
+&lt;li>GCP-specific plugins&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Cross-Provider Abstraction&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Unified event model across providers&lt;/li>
+&lt;li>Provider-agnostic plugin development&lt;/li>
+&lt;li>Event translation and normalization&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ol>
+&lt;h3 id="phase-4-advanced-features-q2-q3-2026">Phase 4: Advanced Features (Q2-Q3 2026)&lt;/h3>
+&lt;ol>
+&lt;li>
+&lt;p>&lt;strong>Event Analytics&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Historical event tracking&lt;/li>
+&lt;li>Pattern recognition for preemptions&lt;/li>
+&lt;li>Predictive event analysis&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Multi-Instance Coordination&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Event propagation across instances&lt;/li>
+&lt;li>Coordinated shutdown for distributed systems&lt;/li>
+&lt;li>Leader election for orchestrated shutdowns&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Cost Optimization Strategies&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Automated bidding strategies for Spot instances&lt;/li>
+&lt;li>Instance type recommendations based on interruption patterns&lt;/li>
+&lt;li>Workload scheduling around interruption patterns&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ol>
+&lt;h2 id="specific-implementation-milestones">Specific Implementation Milestones&lt;/h2>
+&lt;h3 id="aws-spot-instance-handler">AWS Spot Instance Handler&lt;/h3>
+&lt;ol>
+&lt;li>
+&lt;p>&lt;strong>Metadata Service Monitoring&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Poll EC2 metadata service at &lt;code>/latest/meta-data/spot/instance-action&lt;/code>&lt;/li>
+&lt;li>Parse JSON response for action and time&lt;/li>
+&lt;li>Calculate remaining time before termination&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Plugin Execution Flow&lt;/strong>&lt;/p>
+&lt;pre tabindex="0">&lt;code>1. CloudSnooze Daemon detects Spot termination notice
+2. Event Manager creates Spot interrupt event
+3. Plugin Manager finds plugins registered for this event
+4. Plugins execute in priority order:
+a. High priority: Critical data saving
+b. Medium priority: Application state checkpointing
+c. Low priority: Notification and logging
+5. Results are collected and logged
+6. Instance prepares for termination
+&lt;/code>&lt;/pre>&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Configuration Example&lt;/strong>&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-json" data-lang="json">&lt;span style="display:flex;">&lt;span>{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;event_handlers&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;cloud.spot.interrupt&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;enabled&amp;#34;&lt;/span>: &lt;span style="color:#000;font-weight:bold">true&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;polling_interval_seconds&amp;#34;&lt;/span>: &lt;span style="color:#099">5&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;plugins&amp;#34;&lt;/span>: [
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;name&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;mysql-flusher&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;priority&amp;#34;&lt;/span>: &lt;span style="color:#099">100&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;timeout_seconds&amp;#34;&lt;/span>: &lt;span style="color:#099">30&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;config&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;connection_string&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;user:pass@tcp(localhost:3306)/db&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;name&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;app-checkpointer&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;priority&amp;#34;&lt;/span>: &lt;span style="color:#099">80&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;timeout_seconds&amp;#34;&lt;/span>: &lt;span style="color:#099">45&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;config&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;app_endpoint&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;http://localhost:8080/checkpoint&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;verify_success&amp;#34;&lt;/span>: &lt;span style="color:#000;font-weight:bold">true&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;name&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;slack-notifier&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;priority&amp;#34;&lt;/span>: &lt;span style="color:#099">10&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;config&amp;#34;&lt;/span>: {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;webhook_url&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;https://hooks.slack.com/services/...&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000080">&amp;#34;channel&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;#cloud-events&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> ]
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;/li>
+&lt;/ol>
+&lt;h3 id="implementing-cloud-event-sources">Implementing Cloud Event Sources&lt;/h3>
+&lt;p>For AWS Spot instances, the implementation will:&lt;/p>
+&lt;ol>
+&lt;li>
+&lt;p>Create a background goroutine that periodically polls:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-go" data-lang="go">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">func&lt;/span> &lt;span style="color:#900;font-weight:bold">pollSpotInterruptNotices&lt;/span>(ctx context.Context, eventCh &lt;span style="color:#000;font-weight:bold">chan&lt;/span>&lt;span style="color:#000;font-weight:bold">&amp;lt;-&lt;/span> Event) {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> ticker &lt;span style="color:#000;font-weight:bold">:=&lt;/span> time.&lt;span style="color:#900;font-weight:bold">NewTicker&lt;/span>(&lt;span style="color:#099">5&lt;/span> &lt;span style="color:#000;font-weight:bold">*&lt;/span> time.Second)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">defer&lt;/span> ticker.&lt;span style="color:#900;font-weight:bold">Stop&lt;/span>()
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">for&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">select&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">case&lt;/span> &lt;span style="color:#000;font-weight:bold">&amp;lt;-&lt;/span>ctx.&lt;span style="color:#900;font-weight:bold">Done&lt;/span>():
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">case&lt;/span> &lt;span style="color:#000;font-weight:bold">&amp;lt;-&lt;/span>ticker.C:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> resp, err &lt;span style="color:#000;font-weight:bold">:=&lt;/span> http.&lt;span style="color:#900;font-weight:bold">Get&lt;/span>(&lt;span style="color:#d14">&amp;#34;http://169.254.169.254/latest/meta-data/spot/instance-action&amp;#34;&lt;/span>)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> err &lt;span style="color:#000;font-weight:bold">!=&lt;/span> &lt;span style="color:#000;font-weight:bold">nil&lt;/span> &lt;span style="color:#000;font-weight:bold">||&lt;/span> resp.StatusCode &lt;span style="color:#000;font-weight:bold">!=&lt;/span> &lt;span style="color:#099">200&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// No notice yet
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> &lt;span style="color:#000;font-weight:bold">continue&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">defer&lt;/span> resp.Body.&lt;span style="color:#900;font-weight:bold">Close&lt;/span>()
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">var&lt;/span> notice SpotInterruptNotice
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> err &lt;span style="color:#000;font-weight:bold">:=&lt;/span> json.&lt;span style="color:#900;font-weight:bold">NewDecoder&lt;/span>(resp.Body).&lt;span style="color:#900;font-weight:bold">Decode&lt;/span>(&lt;span style="color:#000;font-weight:bold">&amp;amp;&lt;/span>notice); err &lt;span style="color:#000;font-weight:bold">!=&lt;/span> &lt;span style="color:#000;font-weight:bold">nil&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> log.&lt;span style="color:#900;font-weight:bold">Printf&lt;/span>(&lt;span style="color:#d14">&amp;#34;Error decoding spot interrupt notice: %v&amp;#34;&lt;/span>, err)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">continue&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Create and dispatch event
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> event &lt;span style="color:#000;font-weight:bold">:=&lt;/span> Event{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type: EventSpotInterrupt,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Source: &lt;span style="color:#d14">&amp;#34;aws.ec2.metadata-service&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Timestamp: time.&lt;span style="color:#900;font-weight:bold">Now&lt;/span>(),
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> ID: uuid.&lt;span style="color:#900;font-weight:bold">New&lt;/span>().&lt;span style="color:#900;font-weight:bold">String&lt;/span>(),
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Severity: SeverityUrgent,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Data: &lt;span style="color:#000;font-weight:bold">map&lt;/span>[&lt;span style="color:#458;font-weight:bold">string&lt;/span>]&lt;span style="color:#000;font-weight:bold">interface&lt;/span>{}{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;action&amp;#34;&lt;/span>: notice.Action,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;time&amp;#34;&lt;/span>: notice.Time,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;timeRemaining&amp;#34;&lt;/span>: time.&lt;span style="color:#900;font-weight:bold">Until&lt;/span>(notice.Time).&lt;span style="color:#900;font-weight:bold">Seconds&lt;/span>(),
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;instanceID&amp;#34;&lt;/span>: &lt;span style="color:#900;font-weight:bold">getInstanceID&lt;/span>(),
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;instanceType&amp;#34;&lt;/span>: &lt;span style="color:#900;font-weight:bold">getInstanceType&lt;/span>(),
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> eventCh &lt;span style="color:#000;font-weight:bold">&amp;lt;-&lt;/span> event
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;/li>
+&lt;li>
+&lt;p>Register this poller with the Event Manager:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-go" data-lang="go">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">func&lt;/span> (em &lt;span style="color:#000;font-weight:bold">*&lt;/span>EventManager) &lt;span style="color:#900;font-weight:bold">Start&lt;/span>(ctx context.Context) &lt;span style="color:#458;font-weight:bold">error&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> em.eventCh = &lt;span style="color:#0086b3">make&lt;/span>(&lt;span style="color:#000;font-weight:bold">chan&lt;/span> Event, &lt;span style="color:#099">100&lt;/span>)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Start event processing goroutine
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> &lt;span style="color:#000;font-weight:bold">go&lt;/span> em.&lt;span style="color:#900;font-weight:bold">processEvents&lt;/span>(ctx)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Start event sources
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> em.config.AWS.SpotInterruptMonitoring.Enabled {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">go&lt;/span> &lt;span style="color:#900;font-weight:bold">pollSpotInterruptNotices&lt;/span>(ctx, em.eventCh)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Add other event sources...
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#000;font-weight:bold">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;/li>
+&lt;/ol>
+&lt;h2 id="third-party-integration-examples">Third-Party Integration Examples&lt;/h2>
+&lt;h3 id="1-database-flushing-on-spot-termination">1. Database Flushing on Spot Termination&lt;/h3>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-go" data-lang="go">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">// Example plugin for MySQL database flushing
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>&lt;span style="color:#000;font-weight:bold">func&lt;/span> (p &lt;span style="color:#000;font-weight:bold">*&lt;/span>MySQLFlusher) &lt;span style="color:#900;font-weight:bold">HandleEvent&lt;/span>(event plugin.Event) (&lt;span style="color:#458;font-weight:bold">bool&lt;/span>, &lt;span style="color:#000;font-weight:bold">map&lt;/span>[&lt;span style="color:#458;font-weight:bold">string&lt;/span>]&lt;span style="color:#000;font-weight:bold">interface&lt;/span>{}, &lt;span style="color:#458;font-weight:bold">error&lt;/span>) {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> event.Type &lt;span style="color:#000;font-weight:bold">!=&lt;/span> plugin.EventSpotInterrupt {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#000;font-weight:bold">false&lt;/span>, &lt;span style="color:#000;font-weight:bold">nil&lt;/span>, &lt;span style="color:#000;font-weight:bold">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Connect to database
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> db, err &lt;span style="color:#000;font-weight:bold">:=&lt;/span> sql.&lt;span style="color:#900;font-weight:bold">Open&lt;/span>(&lt;span style="color:#d14">&amp;#34;mysql&amp;#34;&lt;/span>, p.connectionString)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> err &lt;span style="color:#000;font-weight:bold">!=&lt;/span> &lt;span style="color:#000;font-weight:bold">nil&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#000;font-weight:bold">false&lt;/span>, &lt;span style="color:#000;font-weight:bold">nil&lt;/span>, fmt.&lt;span style="color:#900;font-weight:bold">Errorf&lt;/span>(&lt;span style="color:#d14">&amp;#34;failed to connect to MySQL: %w&amp;#34;&lt;/span>, err)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">defer&lt;/span> db.&lt;span style="color:#900;font-weight:bold">Close&lt;/span>()
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Flush tables with read lock
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> _, err = db.&lt;span style="color:#900;font-weight:bold">Exec&lt;/span>(&lt;span style="color:#d14">&amp;#34;FLUSH TABLES WITH READ LOCK&amp;#34;&lt;/span>)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> err &lt;span style="color:#000;font-weight:bold">!=&lt;/span> &lt;span style="color:#000;font-weight:bold">nil&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#000;font-weight:bold">false&lt;/span>, &lt;span style="color:#000;font-weight:bold">nil&lt;/span>, fmt.&lt;span style="color:#900;font-weight:bold">Errorf&lt;/span>(&lt;span style="color:#d14">&amp;#34;failed to flush tables: %w&amp;#34;&lt;/span>, err)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Unlock tables after a brief pause to ensure flush completed
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> &lt;span style="color:#000;font-weight:bold">defer&lt;/span> &lt;span style="color:#000;font-weight:bold">func&lt;/span>() {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> _, _ = db.&lt;span style="color:#900;font-weight:bold">Exec&lt;/span>(&lt;span style="color:#d14">&amp;#34;UNLOCK TABLES&amp;#34;&lt;/span>)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }()
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#000;font-weight:bold">true&lt;/span>, &lt;span style="color:#000;font-weight:bold">map&lt;/span>[&lt;span style="color:#458;font-weight:bold">string&lt;/span>]&lt;span style="color:#000;font-weight:bold">interface&lt;/span>{}{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;status&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;mysql_flushed&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;tables_flushed&amp;#34;&lt;/span>: &lt;span style="color:#000;font-weight:bold">true&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }, &lt;span style="color:#000;font-weight:bold">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="2-application-checkpoint-trigger">2. Application Checkpoint Trigger&lt;/h3>
+&lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-python" data-lang="python">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic"># Example external plugin for application checkpoint&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">class&lt;/span> &lt;span style="color:#458;font-weight:bold">AppCheckpointer&lt;/span>:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">def&lt;/span> __init__(&lt;span style="color:#999">self&lt;/span>):
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#999">self&lt;/span>&lt;span style="color:#000;font-weight:bold">.&lt;/span>app_endpoint &lt;span style="color:#000;font-weight:bold">=&lt;/span> &lt;span style="color:#d14">&amp;#34;http://localhost:8080/api/checkpoint&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#999">self&lt;/span>&lt;span style="color:#000;font-weight:bold">.&lt;/span>timeout_seconds &lt;span style="color:#000;font-weight:bold">=&lt;/span> &lt;span style="color:#099">30&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">def&lt;/span> &lt;span style="color:#900;font-weight:bold">handle_event&lt;/span>(&lt;span style="color:#999">self&lt;/span>, event):
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> event&lt;span style="color:#000;font-weight:bold">.&lt;/span>get(&lt;span style="color:#d14">&amp;#34;type&amp;#34;&lt;/span>) &lt;span style="color:#000;font-weight:bold">!=&lt;/span> &lt;span style="color:#d14">&amp;#34;cloud.spot.interrupt&amp;#34;&lt;/span>:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> {&lt;span style="color:#d14">&amp;#34;handled&amp;#34;&lt;/span>: &lt;span style="color:#000;font-weight:bold">False&lt;/span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">try&lt;/span>:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic"># Call application checkpoint API&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> response &lt;span style="color:#000;font-weight:bold">=&lt;/span> requests&lt;span style="color:#000;font-weight:bold">.&lt;/span>post(
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#999">self&lt;/span>&lt;span style="color:#000;font-weight:bold">.&lt;/span>app_endpoint,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> json&lt;span style="color:#000;font-weight:bold">=&lt;/span>{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;reason&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;spot_termination&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;time_remaining&amp;#34;&lt;/span>: event[&lt;span style="color:#d14">&amp;#34;data&amp;#34;&lt;/span>][&lt;span style="color:#d14">&amp;#34;timeRemaining&amp;#34;&lt;/span>]
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> timeout&lt;span style="color:#000;font-weight:bold">=&lt;/span>&lt;span style="color:#999">self&lt;/span>&lt;span style="color:#000;font-weight:bold">.&lt;/span>timeout_seconds
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> )
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> response&lt;span style="color:#000;font-weight:bold">.&lt;/span>status_code &lt;span style="color:#000;font-weight:bold">==&lt;/span> &lt;span style="color:#099">200&lt;/span>:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;handled&amp;#34;&lt;/span>: &lt;span style="color:#000;font-weight:bold">True&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;status&amp;#34;&lt;/span>: &lt;span style="color:#d14">&amp;#34;checkpoint_triggered&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;app_response&amp;#34;&lt;/span>: response&lt;span style="color:#000;font-weight:bold">.&lt;/span>json()
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">else&lt;/span>:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;handled&amp;#34;&lt;/span>: &lt;span style="color:#000;font-weight:bold">False&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;error&amp;#34;&lt;/span>: &lt;span style="color:#d14">f&lt;/span>&lt;span style="color:#d14">&amp;#34;Checkpoint API returned status &lt;/span>&lt;span style="color:#d14">{&lt;/span>response&lt;span style="color:#000;font-weight:bold">.&lt;/span>status_code&lt;span style="color:#d14">}&lt;/span>&lt;span style="color:#d14">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">except&lt;/span> &lt;span style="color:#900;font-weight:bold">Exception&lt;/span> &lt;span style="color:#000;font-weight:bold">as&lt;/span> e:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;handled&amp;#34;&lt;/span>: &lt;span style="color:#000;font-weight:bold">False&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#d14">&amp;#34;error&amp;#34;&lt;/span>: &lt;span style="color:#0086b3">str&lt;/span>(e)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="success-metrics-and-goals">Success Metrics and Goals&lt;/h2>
+&lt;ol>
+&lt;li>
+&lt;p>&lt;strong>Reliability Metrics&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>99.9% successful handling of Spot termination events&lt;/li>
+&lt;li>&amp;lt;5 second detection-to-action latency&lt;/li>
+&lt;li>&amp;lt;1% plugin execution failures&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Community Engagement&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>10+ event handler plugins available at launch&lt;/li>
+&lt;li>5+ third-party plugins within 3 months&lt;/li>
+&lt;li>Developer documentation with &amp;gt;90% satisfaction&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Business Impact&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>30%+ cost savings through safe Spot instance usage&lt;/li>
+&lt;li>&amp;lt;1% data loss incidents on Spot terminations&lt;/li>
+&lt;li>50%+ reduction in manual intervention for spot terminations&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ol></description></item><item><title>Docs:</title><link>https://cloudsnooze.io/docs/integration/api-reference/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://cloudsnooze.io/docs/integration/api-reference/</guid><description>
 &lt;!--
 Copyright 2025 Scott Friedman and CloudSnooze Contributors
 SPDX-License-Identifier: Apache-2.0
@@ -2284,16 +3347,37 @@ SPDX-License-Identifier: Apache-2.0
 &lt;h3 id="phase-4-expansion">Phase 4: Expansion&lt;/h3>
 &lt;ol start="9">
 &lt;li>
-&lt;p>&lt;strong>Expand Cloud Provider Support&lt;/strong>&lt;/p>
+&lt;p>&lt;strong>Plugin Framework Implementation&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Create plugin architecture for extensible idle detection&lt;/li>
+&lt;li>Develop plugin manager for discovery and lifecycle management&lt;/li>
+&lt;li>Implement both native Go and external process plugins&lt;/li>
+&lt;li>Provide SDK and examples for plugin developers&lt;/li>
+&lt;li>See &lt;a href="design/plugin-architecture.md">Plugin Architecture&lt;/a> for details&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Event-Driven Plugin Framework&lt;/strong>&lt;/p>
+&lt;/li>
+&lt;/ol>
+&lt;ul>
+&lt;li>Implement cloud event monitoring (AWS Spot interrupts, etc.)&lt;/li>
+&lt;li>Develop event dispatch and handling system&lt;/li>
+&lt;li>Create plugins for graceful shutdowns and data preservation&lt;/li>
+&lt;li>Add prioritized event handling for critical operations&lt;/li>
+&lt;li>See &lt;a href="design/plugin-event-roadmap.md">Event Framework Roadmap&lt;/a> for details&lt;/li>
+&lt;/ul>
+&lt;ol start="11">
+&lt;li>&lt;strong>Expand Cloud Provider Support&lt;/strong>&lt;/li>
+&lt;/ol>
 &lt;ul>
 &lt;li>Add GCP integration&lt;/li>
 &lt;li>Implement Azure support&lt;/li>
 &lt;li>Create abstraction layer for multi-cloud deployments&lt;/li>
 &lt;li>Test and document cross-cloud functionality&lt;/li>
 &lt;/ul>
-&lt;/li>
-&lt;li>
-&lt;p>&lt;strong>Advanced Features&lt;/strong>&lt;/p>
+&lt;ol start="12">
+&lt;li>&lt;strong>Advanced Features&lt;/strong>
 &lt;ul>
 &lt;li>Implement predictive idle detection&lt;/li>
 &lt;li>Add scheduled operation policies&lt;/li>
@@ -2304,14 +3388,27 @@ SPDX-License-Identifier: Apache-2.0
 &lt;/ol>
 &lt;h2 id="future-considerations">Future Considerations&lt;/h2>
 &lt;ul>
-&lt;li>Multi-instance coordination&lt;/li>
-&lt;li>Cost optimization suggestions&lt;/li>
-&lt;li>Instance right-sizing recommendations&lt;/li>
+&lt;li>Multi-instance coordination and orchestrated shutdowns&lt;/li>
+&lt;li>Cost optimization suggestions and automatic instance bidding&lt;/li>
+&lt;li>Instance right-sizing recommendations based on usage patterns&lt;/li>
 &lt;li>Integration with cost management tools&lt;/li>
 &lt;li>Mobile app for remote monitoring and control&lt;/li>
+&lt;li>REST API for third-party integrations&lt;/li>
+&lt;li>Webhook notifications for important events&lt;/li>
+&lt;li>Team collaboration with permission levels&lt;/li>
+&lt;li>Machine learning for predictive idle detection and event forecasting&lt;/li>
+&lt;li>Infrastructure as Code integration (Terraform, CloudFormation)&lt;/li>
+&lt;li>Tagged instance groups with different policies&lt;/li>
+&lt;li>Instance resume functionality&lt;/li>
+&lt;li>Cost analytics dashboard&lt;/li>
+&lt;li>Advanced event correlation for complex cloud environments&lt;/li>
+&lt;li>Plugin marketplace with rating system&lt;/li>
+&lt;li>Cross-instance event propagation for distributed systems&lt;/li>
+&lt;li>Custom event source plugins for application-specific monitoring&lt;/li>
+&lt;li>Automated application-aware recovery after spot interruptions&lt;/li>
 &lt;/ul>
 &lt;h2 id="contributing">Contributing&lt;/h2>
 &lt;p>If you&amp;rsquo;re interested in contributing to CloudSnooze, please focus on the tasks in the current phase. Check the GitHub issues for specific tasks that need attention.&lt;/p>
 &lt;h2 id="roadmap-status">Roadmap Status&lt;/h2>
-&lt;p>This roadmap was last updated on: April 19, 2025&lt;/p>
+&lt;p>This roadmap was last updated on: April 20, 2025&lt;/p>
 &lt;p>Please note that this roadmap is subject to change based on user feedback and development priorities.&lt;/p></description></item></channel></rss>
