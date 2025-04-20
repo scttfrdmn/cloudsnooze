@@ -29,6 +29,7 @@ JS_HEADER="/**
 go_files_processed=0
 js_files_processed=0
 html_files_processed=0
+md_files_processed=0
 files_skipped=0
 files_with_header=0
 
@@ -131,10 +132,71 @@ find "$PROJECT_ROOT" -name "*.html" -not -path "*/vendor/*" -not -path "*/node_m
     add_html_header "$file"
 done
 
+# Function to add header to Markdown files
+add_md_header() {
+    local file="$1"
+    
+    if has_license_header "$file"; then
+        files_with_header=$((files_with_header + 1))
+        return
+    fi
+    
+    # Check if file starts with a front matter (---)
+    if grep -q "^---" "$file"; then
+        # Get the end of front matter
+        line_num=$(grep -n "^---" "$file" | sed -n '2p' | cut -d: -f1)
+        if [ -n "$line_num" ]; then
+            # Add header after front matter
+            head -n "$line_num" "$file" > "$file.new"
+            echo "" >> "$file.new"
+            echo "<!--" >> "$file.new"
+            echo "Copyright 2025 Scott Friedman and CloudSnooze Contributors" >> "$file.new"
+            echo "SPDX-License-Identifier: Apache-2.0" >> "$file.new"
+            echo "-->" >> "$file.new"
+            echo "" >> "$file.new"
+            tail -n +$((line_num + 1)) "$file" >> "$file.new"
+            mv "$file.new" "$file"
+            md_files_processed=$((md_files_processed + 1))
+            return
+        fi
+    fi
+    
+    # Check if the file starts with a # heading
+    if grep -q "^#" "$file"; then
+        # Insert before the first heading
+        echo "<!--" > "$file.new"
+        echo "Copyright 2025 Scott Friedman and CloudSnooze Contributors" >> "$file.new"
+        echo "SPDX-License-Identifier: Apache-2.0" >> "$file.new"
+        echo "-->" >> "$file.new"
+        echo "" >> "$file.new"
+        cat "$file" >> "$file.new"
+        mv "$file.new" "$file"
+        md_files_processed=$((md_files_processed + 1))
+    else
+        # Insert at the beginning
+        echo "<!--" > "$file.new"
+        echo "Copyright 2025 Scott Friedman and CloudSnooze Contributors" >> "$file.new"
+        echo "SPDX-License-Identifier: Apache-2.0" >> "$file.new"
+        echo "-->" >> "$file.new"
+        echo "" >> "$file.new"
+        cat "$file" >> "$file.new"
+        mv "$file.new" "$file"
+        md_files_processed=$((md_files_processed + 1))
+    fi
+}
+
+# Find and process Markdown files
+echo "Processing Markdown files..."
+find "$PROJECT_ROOT" -name "*.md" -not -path "*/vendor/*" -not -path "*/node_modules/*" -not -path "*/dist/*" -not -name "LICENSE.md" -not -name "README.md" | while read -r file; do
+    echo "  Adding header to $file"
+    add_md_header "$file"
+done
+
 echo "License header addition complete."
 echo "$go_files_processed Go files processed"
 echo "$js_files_processed JavaScript files processed"
 echo "$html_files_processed HTML files processed"
+echo "$md_files_processed Markdown files processed"
 echo "$files_with_header files already had headers"
 echo "$files_skipped files skipped (errors or other issues)"
 echo
