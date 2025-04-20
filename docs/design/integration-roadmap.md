@@ -61,17 +61,29 @@ The integration strategy involves three primary methods:
 
 ### Phase 2: Direct Platform Integrations (Q4 2025)
 
-1. **Slack Integration**
+1. **Slack Integration with Interactive Controls**
    - OAuth-based authentication
    - Rich message formatting with metrics displays
-   - Interactive buttons for instance management
+   - **Interactive components for two-way communication:**
+     - Action buttons for direct instance control (start/stop/restart)
+     - Custom commands via Slack Bot (`/snooze stop i-1234567890abcdef0`)
+     - Interactive dialogs for configuration changes
+     - Approval workflows for critical actions
+   - Persistent context for conversation threads
    - Channel configuration by event type
+   - User permission mapping between Slack and CloudSnooze
 
-2. **Microsoft Teams Integration**
-   - Teams connector support
+2. **Microsoft Teams Integration with Interactive Features**
+   - Teams connector support with bot functionality
    - Adaptive card templates for metrics visualization
-   - Action buttons for immediate response
+   - **Interactive components for two-way control:**
+     - Action buttons for direct instance management
+     - Command support within Teams chat (`@CloudSnooze restart i-1234567890abcdef0`)
+     - Interactive forms for configuration changes
+     - Actionable notifications with approval workflows
    - Tab integration for persistent dashboard
+   - Integration with Teams permissions model
+   - Message threading for context preservation
 
 3. **Email Notification System**
    - SMTP-based notifications
@@ -121,7 +133,7 @@ The integration strategy involves three primary methods:
 
 ## Specific Implementation Examples
 
-### Slack Notification Example
+### Slack Interactive Integration Example
 
 ```go
 // slack.go
@@ -144,9 +156,11 @@ type SlackMessage struct {
 }
 
 type SlackBlock struct {
-    Type   string      `json:"type"`
-    Text   *SlackText  `json:"text,omitempty"`
-    Fields []SlackText `json:"fields,omitempty"`
+    Type      string        `json:"type"`
+    Text      *SlackText    `json:"text,omitempty"`
+    Fields    []SlackText   `json:"fields,omitempty"`
+    Elements  []interface{} `json:"elements,omitempty"`
+    BlockID   string        `json:"block_id,omitempty"`
 }
 
 type SlackText struct {
@@ -154,7 +168,17 @@ type SlackText struct {
     Text string `json:"text"`
 }
 
-func SendSlackInstanceStoppedNotification(webhook string, metrics common.SystemMetrics, instanceID, reason string) error {
+type SlackButton struct {
+    Type     string    `json:"type"`
+    Text     SlackText `json:"text"`
+    ActionID string    `json:"action_id"`
+    Value    string    `json:"value"`
+    Style    string    `json:"style,omitempty"` // primary, danger
+}
+
+// SendSlackInstanceStoppedNotification sends an interactive notification to Slack
+// with buttons that allow direct control of the instance
+func SendSlackInstanceStoppedNotification(webhook string, metrics common.SystemMetrics, instanceID, region, reason string) error {
     message := SlackMessage{
         Blocks: []SlackBlock{
             {
@@ -176,15 +200,60 @@ func SendSlackInstanceStoppedNotification(webhook string, metrics common.SystemM
                 Fields: []SlackText{
                     {Type: "mrkdwn", Text: fmt.Sprintf("*Stop Reason:*\n%s", reason)},
                     {Type: "mrkdwn", Text: fmt.Sprintf("*Stop Time:*\n%s", time.Now().Format(time.RFC1123))},
-                    {Type: "mrkdwn", Text: fmt.Sprintf("*CPU Usage:*\n%.2f%%", metrics.CPUUsage)},
-                    {Type: "mrkdwn", Text: fmt.Sprintf("*Memory Usage:*\n%.2f%%", metrics.MemoryUsage)},
+                    {Type: "mrkdwn", Text: fmt.Sprintf("*Region:*\n%s", region)},
+                    {Type: "mrkdwn", Text: fmt.Sprintf("*Instance ID:*\n%s", instanceID)},
                 },
             },
             {
                 Type: "section",
-                Text: &SlackText{
-                    Type: "mrkdwn",
-                    Text: "Want to restart this instance? Use `snooze restart INSTANCE_ID` or click below:",
+                Fields: []SlackText{
+                    {Type: "mrkdwn", Text: fmt.Sprintf("*CPU Usage:*\n%.2f%%", metrics.CPUUsage)},
+                    {Type: "mrkdwn", Text: fmt.Sprintf("*Memory Usage:*\n%.2f%%", metrics.MemoryUsage)},
+                    {Type: "mrkdwn", Text: fmt.Sprintf("*Network:*\n%.2f KB/s", metrics.NetworkRate)},
+                    {Type: "mrkdwn", Text: fmt.Sprintf("*Disk I/O:*\n%.2f KB/s", metrics.DiskIORate)},
+                },
+            },
+            {
+                Type: "actions",
+                BlockID: "instance_actions_" + instanceID,
+                Elements: []interface{}{
+                    SlackButton{
+                        Type: "button",
+                        Text: SlackText{
+                            Type: "plain_text",
+                            Text: "Start Instance",
+                        },
+                        ActionID: "start_instance",
+                        Value:    instanceID + "|" + region,
+                        Style:    "primary",
+                    },
+                    SlackButton{
+                        Type: "button",
+                        Text: SlackText{
+                            Type: "plain_text",
+                            Text: "View Details",
+                        },
+                        ActionID: "view_details",
+                        Value:    instanceID + "|" + region,
+                    },
+                    SlackButton{
+                        Type: "button",
+                        Text: SlackText{
+                            Type: "plain_text",
+                            Text: "Change Thresholds",
+                        },
+                        ActionID: "change_thresholds",
+                        Value:    instanceID + "|" + region,
+                    },
+                },
+            },
+            {
+                Type: "context",
+                Elements: []interface{}{
+                    SlackText{
+                        Type: "mrkdwn",
+                        Text: fmt.Sprintf("You can also use Slack commands like `/snooze start %s` or `/snooze status`", instanceID),
+                    },
                 },
             },
         },
@@ -206,6 +275,67 @@ func SendSlackInstanceStoppedNotification(webhook string, metrics common.SystemM
     }
     
     return nil
+}
+
+// HandleSlackInteraction processes interactive callbacks from Slack
+func HandleSlackInteraction(payload []byte) (string, error) {
+    // Parse the interaction payload
+    var interaction struct {
+        Type string `json:"type"`
+        Actions []struct {
+            ActionID string `json:"action_id"`
+            Value    string `json:"value"`
+        } `json:"actions"`
+        User struct {
+            ID string `json:"id"`
+            Username string `json:"username"`
+        } `json:"user"`
+    }
+    
+    if err := json.Unmarshal(payload, &interaction); err != nil {
+        return "", fmt.Errorf("error parsing interaction: %w", err)
+    }
+    
+    // Only process button actions for now
+    if interaction.Type != "block_actions" || len(interaction.Actions) == 0 {
+        return "Unsupported interaction type", nil
+    }
+    
+    action := interaction.Actions[0]
+    
+    // Parse the value which contains instanceID and region
+    parts := strings.Split(action.Value, "|")
+    if len(parts) != 2 {
+        return "Invalid action value format", nil
+    }
+    
+    instanceID := parts[0]
+    region := parts[1]
+    
+    switch action.ActionID {
+    case "start_instance":
+        // Call AWS API to start the instance
+        err := startInstance(region, instanceID)
+        if err != nil {
+            return fmt.Sprintf("Failed to start instance %s: %v", instanceID, err), nil
+        }
+        return fmt.Sprintf("Instance %s is starting. This may take a few minutes.", instanceID), nil
+        
+    case "view_details":
+        // Fetch and return detailed information about the instance
+        details, err := getInstanceDetails(region, instanceID)
+        if err != nil {
+            return fmt.Sprintf("Failed to get details for instance %s: %v", instanceID, err), nil
+        }
+        return fmt.Sprintf("*Instance Details*\n%s", details), nil
+        
+    case "change_thresholds":
+        // This would typically open a dialog, but for simplicity we'll just acknowledge
+        return "Opening threshold configuration dialog...", nil
+        
+    default:
+        return "Unsupported action", nil
+    }
 }
 ```
 
@@ -323,9 +453,55 @@ snooze integrations export zapier                    # Generate Zapier integrati
 - **Testing**: QA engineer for cross-platform testing
 - **External Services**: Development accounts for Slack, Zapier, etc.
 
+## ChatOps Integration (Two-Way Communication)
+
+CloudSnooze will implement a comprehensive ChatOps approach, allowing users to not only receive notifications but also control instances and modify configurations directly from chat platforms. This creates a seamless operational workflow where monitoring, alerts, and actions all happen in the same conversation context.
+
+### Key ChatOps Capabilities
+
+1. **Conversational Commands**
+   - Natural language processing for simple commands
+   - Structured commands for complex operations
+   - Context-aware responses based on previous messages
+   - Command suggestions and auto-completion
+
+2. **Interactive Controls**
+   - One-click buttons for common actions (start/stop/restart)
+   - Drop-down selectors for choosing instances or regions
+   - Form-based inputs for threshold configuration
+   - Progress indicators for long-running operations
+
+3. **Conversation Flow Examples**
+
+```
+User: @CloudSnooze list idle instances
+Bot:  Found 3 instances that are currently idle:
+      • i-1234abcd (us-east-1): CPU 2%, Memory 15%, idle for 45 minutes
+      • i-5678efgh (us-west-2): CPU 1%, Memory 12%, idle for 30 minutes
+      • i-9012ijkl (eu-west-1): CPU 3%, Memory 18%, idle for 25 minutes
+      Would you like to stop any of these instances?
+
+User: stop the first one
+Bot:  I'll stop instance i-1234abcd in us-east-1.
+      [Stop Instance] [View Details] [Cancel]
+
+User: [clicks Stop Instance]
+Bot:  ✅ Instance i-1234abcd has been stopped successfully.
+      Estimated cost savings: $0.12/hour
+```
+
+4. **Multi-User Collaboration**
+   - Shared visibility of instance state and actions
+   - Role-based access control tied to chat platform roles
+   - Action audit trail within the conversation
+   - Approval workflows for critical actions
+
+### Implementation Architecture
+
+The ChatOps integration will use a stateful bot implementation that maintains conversation context and understands user intent across message exchanges. This allows for natural, flowing interactions rather than isolated command/response pairs.
+
 ## Future Expansion Possibilities
 
-- **ChatOps Integration**: Command CloudSnooze directly from chat platforms
 - **Voice Assistant Integration**: Alexa and Google Assistant skills
 - **Mobile Push Notifications**: Direct push to CloudSnooze mobile app
 - **Custom Scripting**: Execute custom scripts on events
