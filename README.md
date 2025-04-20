@@ -214,6 +214,22 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+### Reporting Issues
+
+CloudSnooze makes it easy to report issues directly from the CLI:
+
+```bash
+# Report a bug
+snooze issue -type bug -title "Your issue title"
+
+# Request a feature
+snooze issue -type feature -title "Add support for XYZ"
+```
+
+This opens a pre-filled GitHub issue form in your browser with system information to help with troubleshooting.
+
+For more information, see the [Issue Reporting Guide](docs/integration/reporting-issues.md).
+
 ## License
 
 This project is licensed under the Apache License, Version 2.0 - see the [LICENSE](LICENSE) file for details.
