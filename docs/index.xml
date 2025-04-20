@@ -1002,21 +1002,39 @@ SPDX-License-Identifier: Apache-2.0
 &lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="phase-2-direct-platform-integrations-q4-2025">Phase 2: Direct Platform Integrations (Q4 2025)&lt;/h3>
 &lt;ol>
 &lt;li>
-&lt;p>&lt;strong>Slack Integration&lt;/strong>&lt;/p>
+&lt;p>&lt;strong>Slack Integration with Interactive Controls&lt;/strong>&lt;/p>
 &lt;ul>
 &lt;li>OAuth-based authentication&lt;/li>
 &lt;li>Rich message formatting with metrics displays&lt;/li>
-&lt;li>Interactive buttons for instance management&lt;/li>
+&lt;li>&lt;strong>Interactive components for two-way communication:&lt;/strong>
+&lt;ul>
+&lt;li>Action buttons for direct instance control (start/stop/restart)&lt;/li>
+&lt;li>Custom commands via Slack Bot (&lt;code>/snooze stop i-1234567890abcdef0&lt;/code>)&lt;/li>
+&lt;li>Interactive dialogs for configuration changes&lt;/li>
+&lt;li>Approval workflows for critical actions&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>Persistent context for conversation threads&lt;/li>
 &lt;li>Channel configuration by event type&lt;/li>
+&lt;li>User permission mapping between Slack and CloudSnooze&lt;/li>
 &lt;/ul>
 &lt;/li>
 &lt;li>
-&lt;p>&lt;strong>Microsoft Teams Integration&lt;/strong>&lt;/p>
+&lt;p>&lt;strong>Microsoft Teams Integration with Interactive Features&lt;/strong>&lt;/p>
 &lt;ul>
-&lt;li>Teams connector support&lt;/li>
+&lt;li>Teams connector support with bot functionality&lt;/li>
 &lt;li>Adaptive card templates for metrics visualization&lt;/li>
-&lt;li>Action buttons for immediate response&lt;/li>
+&lt;li>&lt;strong>Interactive components for two-way control:&lt;/strong>
+&lt;ul>
+&lt;li>Action buttons for direct instance management&lt;/li>
+&lt;li>Command support within Teams chat (&lt;code>@CloudSnooze restart i-1234567890abcdef0&lt;/code>)&lt;/li>
+&lt;li>Interactive forms for configuration changes&lt;/li>
+&lt;li>Actionable notifications with approval workflows&lt;/li>
+&lt;/ul>
+&lt;/li>
 &lt;li>Tab integration for persistent dashboard&lt;/li>
+&lt;li>Integration with Teams permissions model&lt;/li>
+&lt;li>Message threading for context preservation&lt;/li>
 &lt;/ul>
 &lt;/li>
 &lt;li>
@@ -1090,7 +1108,7 @@ SPDX-License-Identifier: Apache-2.0
 &lt;/li>
 &lt;/ol>
 &lt;h2 id="specific-implementation-examples">Specific Implementation Examples&lt;/h2>
-&lt;h3 id="slack-notification-example">Slack Notification Example&lt;/h3>
+&lt;h3 id="slack-interactive-integration-example">Slack Interactive Integration Example&lt;/h3>
 &lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-go" data-lang="go">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">// slack.go
 &lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>&lt;span style="color:#000;font-weight:bold">package&lt;/span> integrations
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
@@ -1114,6 +1132,8 @@ SPDX-License-Identifier: Apache-2.0
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#d14">`json:&amp;#34;type&amp;#34;`&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text &lt;span style="color:#000;font-weight:bold">*&lt;/span>SlackText &lt;span style="color:#d14">`json:&amp;#34;text,omitempty&amp;#34;`&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Fields []SlackText &lt;span style="color:#d14">`json:&amp;#34;fields,omitempty&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Elements []&lt;span style="color:#000;font-weight:bold">interface&lt;/span>{} &lt;span style="color:#d14">`json:&amp;#34;elements,omitempty&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> BlockID &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#d14">`json:&amp;#34;block_id,omitempty&amp;#34;`&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">type&lt;/span> SlackText &lt;span style="color:#000;font-weight:bold">struct&lt;/span> {
@@ -1121,7 +1141,17 @@ SPDX-License-Identifier: Apache-2.0
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#d14">`json:&amp;#34;text&amp;#34;`&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">func&lt;/span> &lt;span style="color:#900;font-weight:bold">SendSlackInstanceStoppedNotification&lt;/span>(webhook &lt;span style="color:#458;font-weight:bold">string&lt;/span>, metrics common.SystemMetrics, instanceID, reason &lt;span style="color:#458;font-weight:bold">string&lt;/span>) &lt;span style="color:#458;font-weight:bold">error&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#000;font-weight:bold">type&lt;/span> SlackButton &lt;span style="color:#000;font-weight:bold">struct&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#d14">`json:&amp;#34;type&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text SlackText &lt;span style="color:#d14">`json:&amp;#34;text&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> ActionID &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#d14">`json:&amp;#34;action_id&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Value &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#d14">`json:&amp;#34;value&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Style &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#d14">`json:&amp;#34;style,omitempty&amp;#34;`&lt;/span> &lt;span style="color:#998;font-style:italic">// primary, danger
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">// SendSlackInstanceStoppedNotification sends an interactive notification to Slack
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">// with buttons that allow direct control of the instance
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>&lt;span style="color:#000;font-weight:bold">func&lt;/span> &lt;span style="color:#900;font-weight:bold">SendSlackInstanceStoppedNotification&lt;/span>(webhook &lt;span style="color:#458;font-weight:bold">string&lt;/span>, metrics common.SystemMetrics, instanceID, region, reason &lt;span style="color:#458;font-weight:bold">string&lt;/span>) &lt;span style="color:#458;font-weight:bold">error&lt;/span> {
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> message &lt;span style="color:#000;font-weight:bold">:=&lt;/span> SlackMessage{
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Blocks: []SlackBlock{
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {
@@ -1143,15 +1173,60 @@ SPDX-License-Identifier: Apache-2.0
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Fields: []SlackText{
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {Type: &lt;span style="color:#d14">&amp;#34;mrkdwn&amp;#34;&lt;/span>, Text: fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;*Stop Reason:*\n%s&amp;#34;&lt;/span>, reason)},
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {Type: &lt;span style="color:#d14">&amp;#34;mrkdwn&amp;#34;&lt;/span>, Text: fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;*Stop Time:*\n%s&amp;#34;&lt;/span>, time.&lt;span style="color:#900;font-weight:bold">Now&lt;/span>().&lt;span style="color:#900;font-weight:bold">Format&lt;/span>(time.RFC1123))},
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {Type: &lt;span style="color:#d14">&amp;#34;mrkdwn&amp;#34;&lt;/span>, Text: fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;*CPU Usage:*\n%.2f%%&amp;#34;&lt;/span>, metrics.CPUUsage)},
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {Type: &lt;span style="color:#d14">&amp;#34;mrkdwn&amp;#34;&lt;/span>, Text: fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;*Memory Usage:*\n%.2f%%&amp;#34;&lt;/span>, metrics.MemoryUsage)},
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {Type: &lt;span style="color:#d14">&amp;#34;mrkdwn&amp;#34;&lt;/span>, Text: fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;*Region:*\n%s&amp;#34;&lt;/span>, region)},
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {Type: &lt;span style="color:#d14">&amp;#34;mrkdwn&amp;#34;&lt;/span>, Text: fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;*Instance ID:*\n%s&amp;#34;&lt;/span>, instanceID)},
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type: &lt;span style="color:#d14">&amp;#34;section&amp;#34;&lt;/span>,
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text: &lt;span style="color:#000;font-weight:bold">&amp;amp;&lt;/span>SlackText{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Fields: []SlackText{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {Type: &lt;span style="color:#d14">&amp;#34;mrkdwn&amp;#34;&lt;/span>, Text: fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;*CPU Usage:*\n%.2f%%&amp;#34;&lt;/span>, metrics.CPUUsage)},
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {Type: &lt;span style="color:#d14">&amp;#34;mrkdwn&amp;#34;&lt;/span>, Text: fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;*Memory Usage:*\n%.2f%%&amp;#34;&lt;/span>, metrics.MemoryUsage)},
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {Type: &lt;span style="color:#d14">&amp;#34;mrkdwn&amp;#34;&lt;/span>, Text: fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;*Network:*\n%.2f KB/s&amp;#34;&lt;/span>, metrics.NetworkRate)},
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {Type: &lt;span style="color:#d14">&amp;#34;mrkdwn&amp;#34;&lt;/span>, Text: fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;*Disk I/O:*\n%.2f KB/s&amp;#34;&lt;/span>, metrics.DiskIORate)},
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type: &lt;span style="color:#d14">&amp;#34;actions&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> BlockID: &lt;span style="color:#d14">&amp;#34;instance_actions_&amp;#34;&lt;/span> &lt;span style="color:#000;font-weight:bold">+&lt;/span> instanceID,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Elements: []&lt;span style="color:#000;font-weight:bold">interface&lt;/span>{}{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> SlackButton{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type: &lt;span style="color:#d14">&amp;#34;button&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text: SlackText{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type: &lt;span style="color:#d14">&amp;#34;plain_text&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text: &lt;span style="color:#d14">&amp;#34;Start Instance&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> ActionID: &lt;span style="color:#d14">&amp;#34;start_instance&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Value: instanceID &lt;span style="color:#000;font-weight:bold">+&lt;/span> &lt;span style="color:#d14">&amp;#34;|&amp;#34;&lt;/span> &lt;span style="color:#000;font-weight:bold">+&lt;/span> region,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Style: &lt;span style="color:#d14">&amp;#34;primary&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> SlackButton{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type: &lt;span style="color:#d14">&amp;#34;button&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text: SlackText{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type: &lt;span style="color:#d14">&amp;#34;plain_text&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text: &lt;span style="color:#d14">&amp;#34;View Details&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> ActionID: &lt;span style="color:#d14">&amp;#34;view_details&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Value: instanceID &lt;span style="color:#000;font-weight:bold">+&lt;/span> &lt;span style="color:#d14">&amp;#34;|&amp;#34;&lt;/span> &lt;span style="color:#000;font-weight:bold">+&lt;/span> region,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> SlackButton{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type: &lt;span style="color:#d14">&amp;#34;button&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text: SlackText{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type: &lt;span style="color:#d14">&amp;#34;plain_text&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text: &lt;span style="color:#d14">&amp;#34;Change Thresholds&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> ActionID: &lt;span style="color:#d14">&amp;#34;change_thresholds&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Value: instanceID &lt;span style="color:#000;font-weight:bold">+&lt;/span> &lt;span style="color:#d14">&amp;#34;|&amp;#34;&lt;/span> &lt;span style="color:#000;font-weight:bold">+&lt;/span> region,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type: &lt;span style="color:#d14">&amp;#34;context&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Elements: []&lt;span style="color:#000;font-weight:bold">interface&lt;/span>{}{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> SlackText{
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type: &lt;span style="color:#d14">&amp;#34;mrkdwn&amp;#34;&lt;/span>,
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text: &lt;span style="color:#d14">&amp;#34;Want to restart this instance? Use `snooze restart INSTANCE_ID` or click below:&amp;#34;&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Text: fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;You can also use Slack commands like `/snooze start %s` or `/snooze status`&amp;#34;&lt;/span>, instanceID),
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> },
@@ -1173,6 +1248,67 @@ SPDX-License-Identifier: Apache-2.0
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#000;font-weight:bold">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">// HandleSlackInteraction processes interactive callbacks from Slack
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span>&lt;span style="color:#000;font-weight:bold">func&lt;/span> &lt;span style="color:#900;font-weight:bold">HandleSlackInteraction&lt;/span>(payload []&lt;span style="color:#458;font-weight:bold">byte&lt;/span>) (&lt;span style="color:#458;font-weight:bold">string&lt;/span>, &lt;span style="color:#458;font-weight:bold">error&lt;/span>) {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Parse the interaction payload
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> &lt;span style="color:#000;font-weight:bold">var&lt;/span> interaction &lt;span style="color:#000;font-weight:bold">struct&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Type &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#d14">`json:&amp;#34;type&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Actions []&lt;span style="color:#000;font-weight:bold">struct&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> ActionID &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#d14">`json:&amp;#34;action_id&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Value &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#d14">`json:&amp;#34;value&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> } &lt;span style="color:#d14">`json:&amp;#34;actions&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> User &lt;span style="color:#000;font-weight:bold">struct&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> ID &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#d14">`json:&amp;#34;id&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Username &lt;span style="color:#458;font-weight:bold">string&lt;/span> &lt;span style="color:#d14">`json:&amp;#34;username&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> } &lt;span style="color:#d14">`json:&amp;#34;user&amp;#34;`&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> err &lt;span style="color:#000;font-weight:bold">:=&lt;/span> json.&lt;span style="color:#900;font-weight:bold">Unmarshal&lt;/span>(payload, &lt;span style="color:#000;font-weight:bold">&amp;amp;&lt;/span>interaction); err &lt;span style="color:#000;font-weight:bold">!=&lt;/span> &lt;span style="color:#000;font-weight:bold">nil&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#d14">&amp;#34;&amp;#34;&lt;/span>, fmt.&lt;span style="color:#900;font-weight:bold">Errorf&lt;/span>(&lt;span style="color:#d14">&amp;#34;error parsing interaction: %w&amp;#34;&lt;/span>, err)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Only process button actions for now
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> interaction.Type &lt;span style="color:#000;font-weight:bold">!=&lt;/span> &lt;span style="color:#d14">&amp;#34;block_actions&amp;#34;&lt;/span> &lt;span style="color:#000;font-weight:bold">||&lt;/span> &lt;span style="color:#0086b3">len&lt;/span>(interaction.Actions) &lt;span style="color:#000;font-weight:bold">==&lt;/span> &lt;span style="color:#099">0&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#d14">&amp;#34;Unsupported interaction type&amp;#34;&lt;/span>, &lt;span style="color:#000;font-weight:bold">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> action &lt;span style="color:#000;font-weight:bold">:=&lt;/span> interaction.Actions[&lt;span style="color:#099">0&lt;/span>]
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Parse the value which contains instanceID and region
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> parts &lt;span style="color:#000;font-weight:bold">:=&lt;/span> strings.&lt;span style="color:#900;font-weight:bold">Split&lt;/span>(action.Value, &lt;span style="color:#d14">&amp;#34;|&amp;#34;&lt;/span>)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> &lt;span style="color:#0086b3">len&lt;/span>(parts) &lt;span style="color:#000;font-weight:bold">!=&lt;/span> &lt;span style="color:#099">2&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#d14">&amp;#34;Invalid action value format&amp;#34;&lt;/span>, &lt;span style="color:#000;font-weight:bold">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> instanceID &lt;span style="color:#000;font-weight:bold">:=&lt;/span> parts[&lt;span style="color:#099">0&lt;/span>]
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> region &lt;span style="color:#000;font-weight:bold">:=&lt;/span> parts[&lt;span style="color:#099">1&lt;/span>]
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">switch&lt;/span> action.ActionID {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">case&lt;/span> &lt;span style="color:#d14">&amp;#34;start_instance&amp;#34;&lt;/span>:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Call AWS API to start the instance
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> err &lt;span style="color:#000;font-weight:bold">:=&lt;/span> &lt;span style="color:#900;font-weight:bold">startInstance&lt;/span>(region, instanceID)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> err &lt;span style="color:#000;font-weight:bold">!=&lt;/span> &lt;span style="color:#000;font-weight:bold">nil&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;Failed to start instance %s: %v&amp;#34;&lt;/span>, instanceID, err), &lt;span style="color:#000;font-weight:bold">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;Instance %s is starting. This may take a few minutes.&amp;#34;&lt;/span>, instanceID), &lt;span style="color:#000;font-weight:bold">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">case&lt;/span> &lt;span style="color:#d14">&amp;#34;view_details&amp;#34;&lt;/span>:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// Fetch and return detailed information about the instance
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> details, err &lt;span style="color:#000;font-weight:bold">:=&lt;/span> &lt;span style="color:#900;font-weight:bold">getInstanceDetails&lt;/span>(region, instanceID)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">if&lt;/span> err &lt;span style="color:#000;font-weight:bold">!=&lt;/span> &lt;span style="color:#000;font-weight:bold">nil&lt;/span> {
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;Failed to get details for instance %s: %v&amp;#34;&lt;/span>, instanceID, err), &lt;span style="color:#000;font-weight:bold">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> fmt.&lt;span style="color:#900;font-weight:bold">Sprintf&lt;/span>(&lt;span style="color:#d14">&amp;#34;*Instance Details*\n%s&amp;#34;&lt;/span>, details), &lt;span style="color:#000;font-weight:bold">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">case&lt;/span> &lt;span style="color:#d14">&amp;#34;change_thresholds&amp;#34;&lt;/span>:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#998;font-style:italic">// This would typically open a dialog, but for simplicity we&amp;#39;ll just acknowledge
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">&lt;/span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#d14">&amp;#34;Opening threshold configuration dialog...&amp;#34;&lt;/span>, &lt;span style="color:#000;font-weight:bold">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">default&lt;/span>:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#000;font-weight:bold">return&lt;/span> &lt;span style="color:#d14">&amp;#34;Unsupported action&amp;#34;&lt;/span>, &lt;span style="color:#000;font-weight:bold">nil&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> }
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
 &lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="zapier-integration-example">Zapier Integration Example&lt;/h3>
 &lt;p>Zapier Trigger: &lt;code>instance_stopped&lt;/code>&lt;/p>
@@ -1288,9 +1424,58 @@ snooze integrations export zapier # Generate Zapier integration files
 &lt;li>&lt;strong>Testing&lt;/strong>: QA engineer for cross-platform testing&lt;/li>
 &lt;li>&lt;strong>External Services&lt;/strong>: Development accounts for Slack, Zapier, etc.&lt;/li>
 &lt;/ul>
+&lt;h2 id="chatops-integration-two-way-communication">ChatOps Integration (Two-Way Communication)&lt;/h2>
+&lt;p>CloudSnooze will implement a comprehensive ChatOps approach, allowing users to not only receive notifications but also control instances and modify configurations directly from chat platforms. This creates a seamless operational workflow where monitoring, alerts, and actions all happen in the same conversation context.&lt;/p>
+&lt;h3 id="key-chatops-capabilities">Key ChatOps Capabilities&lt;/h3>
+&lt;ol>
+&lt;li>
+&lt;p>&lt;strong>Conversational Commands&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>Natural language processing for simple commands&lt;/li>
+&lt;li>Structured commands for complex operations&lt;/li>
+&lt;li>Context-aware responses based on previous messages&lt;/li>
+&lt;li>Command suggestions and auto-completion&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Interactive Controls&lt;/strong>&lt;/p>
+&lt;ul>
+&lt;li>One-click buttons for common actions (start/stop/restart)&lt;/li>
+&lt;li>Drop-down selectors for choosing instances or regions&lt;/li>
+&lt;li>Form-based inputs for threshold configuration&lt;/li>
+&lt;li>Progress indicators for long-running operations&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>&lt;strong>Conversation Flow Examples&lt;/strong>&lt;/p>
+&lt;/li>
+&lt;/ol>
+&lt;pre tabindex="0">&lt;code>User: @CloudSnooze list idle instances
+Bot: Found 3 instances that are currently idle:
+• i-1234abcd (us-east-1): CPU 2%, Memory 15%, idle for 45 minutes
+• i-5678efgh (us-west-2): CPU 1%, Memory 12%, idle for 30 minutes
+• i-9012ijkl (eu-west-1): CPU 3%, Memory 18%, idle for 25 minutes
+Would you like to stop any of these instances?
+User: stop the first one
+Bot: I&amp;#39;ll stop instance i-1234abcd in us-east-1.
+[Stop Instance] [View Details] [Cancel]
+User: [clicks Stop Instance]
+Bot: ✅ Instance i-1234abcd has been stopped successfully.
+Estimated cost savings: $0.12/hour
+&lt;/code>&lt;/pre>&lt;ol start="4">
+&lt;li>&lt;strong>Multi-User Collaboration&lt;/strong>
+&lt;ul>
+&lt;li>Shared visibility of instance state and actions&lt;/li>
+&lt;li>Role-based access control tied to chat platform roles&lt;/li>
+&lt;li>Action audit trail within the conversation&lt;/li>
+&lt;li>Approval workflows for critical actions&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ol>
+&lt;h3 id="implementation-architecture">Implementation Architecture&lt;/h3>
+&lt;p>The ChatOps integration will use a stateful bot implementation that maintains conversation context and understands user intent across message exchanges. This allows for natural, flowing interactions rather than isolated command/response pairs.&lt;/p>
 &lt;h2 id="future-expansion-possibilities">Future Expansion Possibilities&lt;/h2>
 &lt;ul>
-&lt;li>&lt;strong>ChatOps Integration&lt;/strong>: Command CloudSnooze directly from chat platforms&lt;/li>
 &lt;li>&lt;strong>Voice Assistant Integration&lt;/strong>: Alexa and Google Assistant skills&lt;/li>
 &lt;li>&lt;strong>Mobile Push Notifications&lt;/strong>: Direct push to CloudSnooze mobile app&lt;/li>
 &lt;li>&lt;strong>Custom Scripting&lt;/strong>: Execute custom scripts on events&lt;/li>
