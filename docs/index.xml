@@ -1,4 +1,8 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>CloudSnooze – Documentation</title><link>https://cloudsnooze.io/docs/</link><description>Recent content in Documentation on CloudSnooze</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><atom:link href="https://cloudsnooze.io/docs/index.xml" rel="self" type="application/rss+xml"/><item><title>Docs:</title><link>https://cloudsnooze.io/docs/building/packaging/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://cloudsnooze.io/docs/building/packaging/</guid><description>
+&lt;!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
 &lt;h1 id="cloudsnooze-packaging-guide">CloudSnooze Packaging Guide&lt;/h1>
 &lt;p>This document details the packaging and release process for CloudSnooze.&lt;/p>
 &lt;h2 id="versioning-scheme">Versioning Scheme&lt;/h2>
@@ -134,6 +138,10 @@
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>curl -LO https://github.com/scttfrdmn/cloudsnooze/releases/download/latest/cloudsnooze-latest_amd64.deb
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>sudo dpkg -i cloudsnooze-latest_amd64.deb
 &lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div></description></item><item><title>Docs:</title><link>https://cloudsnooze.io/docs/design/command-structure/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://cloudsnooze.io/docs/design/command-structure/</guid><description>
+&lt;!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
 &lt;h1 id="cloudsnooze---command-structure">CloudSnooze - Command Structure&lt;/h1>
 &lt;p>This document outlines the command structure for the CloudSnooze CLI tool (&lt;code>snooze&lt;/code>), including all available commands, options, and usage examples.&lt;/p>
 &lt;h2 id="top-level-command">Top-Level Command&lt;/h2>
@@ -331,6 +339,10 @@ All required permissions are configured correctly.
 &lt;li>&lt;code>4&lt;/code>: Communication error with daemon&lt;/li>
 &lt;li>&lt;code>5&lt;/code>: Command syntax error&lt;/li>
 &lt;/ul></description></item><item><title>Docs:</title><link>https://cloudsnooze.io/docs/design/data-model/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://cloudsnooze.io/docs/design/data-model/</guid><description>
+&lt;!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
 &lt;h1 id="cloudsnooze---data-model">CloudSnooze - Data Model&lt;/h1>
 &lt;p>This document defines the primary data structures used in CloudSnooze, including configuration, metrics, and communication protocols.&lt;/p>
 &lt;h2 id="configuration-model">Configuration Model&lt;/h2>
@@ -495,6 +507,10 @@ CloudSnooze:Version = &amp;#34;1.0.0&amp;#34;
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> ]
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
 &lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div></description></item><item><title>Docs:</title><link>https://cloudsnooze.io/docs/design/deployment-template/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://cloudsnooze.io/docs/design/deployment-template/</guid><description>
+&lt;!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
 &lt;h1 id="cloudsnooze-deployment-templates">CloudSnooze Deployment Templates&lt;/h1>
 &lt;p>This document provides templates and examples for deploying CloudSnooze in various cloud environments.&lt;/p>
 &lt;h2 id="aws-deployment">AWS Deployment&lt;/h2>
@@ -922,6 +938,10 @@ CloudSnooze:Version = &amp;#34;1.0.0&amp;#34;
 &lt;li>DEB: &lt;code>https://github.com/scttfrdmn/cloudsnooze/releases/download/v0.1.0/cloudsnooze_0.1.0_amd64.deb&lt;/code>&lt;/li>
 &lt;li>RPM: &lt;code>https://github.com/scttfrdmn/cloudsnooze/releases/download/v0.1.0/cloudsnooze-0.1.0-1.x86_64.rpm&lt;/code>&lt;/li>
 &lt;/ul></description></item><item><title>Docs:</title><link>https://cloudsnooze.io/docs/design/overview/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://cloudsnooze.io/docs/design/overview/</guid><description>
+&lt;!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
 &lt;h1 id="cloudsnooze---project-overview">CloudSnooze - Project Overview&lt;/h1>
 &lt;h2 id="introduction">Introduction&lt;/h2>
 &lt;p>CloudSnooze is a lightweight, efficient solution for automatically stopping idle cloud instances to save costs. It monitors various system metrics and, when all metrics remain below specified thresholds for a defined period, safely stops the instance.&lt;/p>
@@ -1010,6 +1030,10 @@ CloudSnooze:Version = &amp;#34;1.0.0&amp;#34;
 &lt;li>Integration with cloud provider billing APIs for cost tracking&lt;/li>
 &lt;li>Advanced prediction of idle periods based on historical patterns&lt;/li>
 &lt;/ul></description></item><item><title>Docs:</title><link>https://cloudsnooze.io/docs/integration/api-reference/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://cloudsnooze.io/docs/integration/api-reference/</guid><description>
+&lt;!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
 &lt;h1 id="cloudsnooze-api-reference">CloudSnooze API Reference&lt;/h1>
 &lt;p>This document provides detailed information about CloudSnooze&amp;rsquo;s APIs for integration with other tools and systems.&lt;/p>
 &lt;h2 id="socket-api">Socket API&lt;/h2>
@@ -1457,6 +1481,10 @@ CloudSnooze:Version = &amp;#34;1.0.0&amp;#34;
 &lt;/li>
 &lt;/ul>
 &lt;p>Future versions will maintain backward compatibility with existing tag formats and socket commands.&lt;/p></description></item><item><title>Docs:</title><link>https://cloudsnooze.io/docs/integration/external-tools/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://cloudsnooze.io/docs/integration/external-tools/</guid><description>
+&lt;!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
 &lt;h1 id="cloudsnooze-integration-guide-for-external-tools">CloudSnooze Integration Guide for External Tools&lt;/h1>
 &lt;p>This document describes how external tools like provisioners, schedulers, and monitoring systems can integrate with CloudSnooze to detect and respond to instance stop events.&lt;/p>
 &lt;h2 id="overview">Overview&lt;/h2>
@@ -1824,6 +1852,10 @@ CloudSnooze:Version = &amp;#34;1.0.0&amp;#34;
 &lt;li>Added service-specific authorization for instance restarts&lt;/li>
 &lt;li>Expanded documentation with more implementation examples&lt;/li>
 &lt;/ul></description></item><item><title>Docs:</title><link>https://cloudsnooze.io/docs/integration/restart-logic/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://cloudsnooze.io/docs/integration/restart-logic/</guid><description>
+&lt;!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
 &lt;h1 id="cloudsnooze-restart-logic-for-external-tools">CloudSnooze Restart Logic for External Tools&lt;/h1>
 &lt;p>This document provides detailed guidance on implementing restart logic for instances that have been stopped by CloudSnooze.&lt;/p>
 &lt;h2 id="new-restart-capability">New Restart Capability&lt;/h2>
@@ -2150,6 +2182,10 @@ CloudSnooze:Version = &amp;#34;1.0.0&amp;#34;
 &lt;/ul>
 &lt;/li>
 &lt;/ol></description></item><item><title>Docs:</title><link>https://cloudsnooze.io/docs/roadmap/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>https://cloudsnooze.io/docs/roadmap/</guid><description>
+&lt;!--
+Copyright 2025 Scott Friedman and CloudSnooze Contributors
+SPDX-License-Identifier: Apache-2.0
+-->
 &lt;h1 id="cloudsnooze-development-roadmap">CloudSnooze Development Roadmap&lt;/h1>
 &lt;p>This document outlines the planned development roadmap for CloudSnooze. The roadmap is organized into phases, with each phase building upon the previous one.&lt;/p>
 &lt;h2 id="completed-features">Completed Features&lt;/h2>
