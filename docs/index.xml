@@ -1043,34 +1043,10 @@ SPDX-License-Identifier: Apache-2.0
 &lt;li>&lt;strong>External Process Plugins&lt;/strong>: For third-party, language-agnostic plugins with stronger isolation&lt;/li>
 &lt;/ol>
 &lt;p>This dual approach balances performance, security, and flexibility while enabling a rich ecosystem of extensions.&lt;/p>
-&lt;pre tabindex="0">&lt;code>┌─────────────────────────────────────────────────────────────────┐
-│ CloudSnooze │
-│ │
-│ ┌───────────────┐ ┌───────────────┐ ┌───────────────┐ │
-│ │ Core Monitors │ │ Plugin Manager │ │ Event Manager │ │
-│ └───────┬───────┘ └───────┬───────┘ └───────┬───────┘ │
-│ │ │ │ │
-│ │ ▼ │ │
-│ │ ┌───────────────┐ │ │
-│ │ │Plugin Registry │ │ │
-│ │ └───────┬───────┘ │ │
-│ │ │ │ │
-└──────────┼─────────────────────┼─────────────────────┼──────────┘
-│ │ │
-▼ ▼ ▼
-┌─────────────┐ ┌─────────────────────┐ ┌─────────────┐
-│ System │ │ │ │ Cloud │
-│ Metrics │ ▼ ▼ │ Events │
-└─────────────┘ ┌─────────┐ ┌──────────────┐ │
-│ Native │◄───────┤ External │◄─────────┘
-│ Plugins │ │ Plugins │
-└────┬────┘ └──────┬───────┘
-│ │
-│ ▼
-│ ┌──────────────┐
-└───────────►│ IPC Protocol │
-└──────────────┘
-&lt;/code>&lt;/pre>&lt;h2 id="core-components">Core Components&lt;/h2>
+&lt;p align="center">
+&lt;img src="https://cloudsnooze.io/images/plugin-architecture.svg" alt="CloudSnooze Plugin Architecture" width="700"/>
+&lt;/p>
+&lt;h2 id="core-components">Core Components&lt;/h2>
 &lt;h3 id="1-plugin-interface">1. Plugin Interface&lt;/h3>
 &lt;p>All plugins must implement this interface:&lt;/p>
 &lt;div class="highlight">&lt;pre tabindex="0" style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-go" data-lang="go">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#998;font-style:italic">// SnoozePluginInterface defines the contract all plugins must implement
@@ -2099,6 +2075,9 @@ SPDX-License-Identifier: Apache-2.0
 -->
 &lt;h1 id="cloudsnooze-api-reference">CloudSnooze API Reference&lt;/h1>
 &lt;p>This document provides detailed information about CloudSnooze&amp;rsquo;s APIs for integration with other tools and systems.&lt;/p>
+&lt;p align="center">
+&lt;img src="https://cloudsnooze.io/images/api-architecture.svg" alt="CloudSnooze API Architecture" width="700"/>
+&lt;/p>
 &lt;h2 id="socket-api">Socket API&lt;/h2>
 &lt;p>CloudSnooze provides a Unix socket-based API for local communication with other applications running on the same instance.&lt;/p>
 &lt;h3 id="socket-location">Socket Location&lt;/h3>
