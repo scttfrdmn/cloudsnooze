@@ -16,35 +16,9 @@ The CloudSnooze Plugin System uses a hybrid approach combining:
 
 This dual approach balances performance, security, and flexibility while enabling a rich ecosystem of extensions.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         CloudSnooze                             │
-│                                                                 │
-│  ┌───────────────┐     ┌───────────────┐     ┌───────────────┐  │
-│  │ Core Monitors │     │ Plugin Manager │     │ Event Manager │  │
-│  └───────┬───────┘     └───────┬───────┘     └───────┬───────┘  │
-│          │                     │                     │          │
-│          │                     ▼                     │          │
-│          │             ┌───────────────┐             │          │
-│          │             │Plugin Registry │             │          │
-│          │             └───────┬───────┘             │          │
-│          │                     │                     │          │
-└──────────┼─────────────────────┼─────────────────────┼──────────┘
-           │                     │                     │
-           ▼                     ▼                     ▼
-    ┌─────────────┐     ┌─────────────────────┐    ┌─────────────┐
-    │ System      │     │                     │    │ Cloud       │
-    │ Metrics     │     ▼                     ▼    │ Events      │
-    └─────────────┘ ┌─────────┐        ┌──────────────┐          │
-                    │ Native  │◄───────┤ External     │◄─────────┘
-                    │ Plugins │        │ Plugins      │
-                    └────┬────┘        └──────┬───────┘
-                         │                    │
-                         │                    ▼
-                         │            ┌──────────────┐
-                         └───────────►│ IPC Protocol │
-                                      └──────────────┘
-```
+<p align="center">
+  <img src="../images/plugin-architecture.svg" alt="CloudSnooze Plugin Architecture" width="700"/>
+</p>
 
 ## Core Components
 

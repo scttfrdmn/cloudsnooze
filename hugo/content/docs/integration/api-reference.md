@@ -7,6 +7,10 @@ SPDX-License-Identifier: Apache-2.0
 
 This document provides detailed information about CloudSnooze's APIs for integration with other tools and systems.
 
+<p align="center">
+  <img src="/images/api-architecture.svg" alt="CloudSnooze API Architecture" width="700"/>
+</p>
+
 ## Socket API
 
 CloudSnooze provides a Unix socket-based API for local communication with other applications running on the same instance.
