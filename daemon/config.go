@@ -20,6 +20,9 @@ type Config struct {
 	GPUMonitoringEnabled bool    `json:"gpu_monitoring_enabled"`
 	GPUThresholdPercent  float64 `json:"gpu_threshold_percent"`
 	
+	// Cloud provider settings
+	ProviderType         string `json:"provider_type"`       // Which cloud provider to use (empty for auto-detection)
+	
 	// AWS settings
 	AWSRegion          string `json:"aws_region"`
 	EnableInstanceTags bool   `json:"enable_instance_tags"`
@@ -35,6 +38,10 @@ type Config struct {
 	
 	// Advanced settings
 	MonitoringMode string `json:"monitoring_mode"` // "basic" or "advanced"
+	
+	// Plugin settings
+	PluginsEnabled bool   `json:"plugins_enabled"`     // Whether to use the plugin system
+	PluginsDir     string `json:"plugins_dir"`         // Directory to load external plugins from
 }
 
 // LoggingConfig defines logging behavior
@@ -59,6 +66,7 @@ func DefaultConfig() Config {
 		InputIdleThresholdSecs:  900,
 		GPUMonitoringEnabled:    true,
 		GPUThresholdPercent:     5.0,
+		ProviderType:            "",  // Empty for auto-detection
 		AWSRegion:               "us-east-1",
 		EnableInstanceTags:      true,
 		TaggingPrefix:           "CloudSnooze",
@@ -74,5 +82,7 @@ func DefaultConfig() Config {
 			CloudWatchLogGroup: "CloudSnooze",
 		},
 		MonitoringMode: "basic",
+		PluginsEnabled: true,
+		PluginsDir:     "/etc/cloudsnooze/plugins",
 	}
 }

@@ -39,6 +39,7 @@
 - **Low Resource Usage**: Lightweight Go daemon with minimal impact on the monitored instance
 - **Comprehensive Monitoring**: Tracks CPU, memory, network, disk I/O, user input, and GPU activity
 - **Real User Activity Detection**: Monitors actual keyboard and mouse usage, not just logins
+- **Plugin Architecture**: Extensible plugin system for cloud providers and more
 - **Cloud Provider Agnostic**: Initially supports AWS, with design for future expansion
 - **Cross-Architecture Support**: Works on both x86_64 and ARM64 instances
 - **Multiple Interfaces**: CLI tool, GUI application, and daemon
@@ -149,6 +150,11 @@ After installation, CloudSnooze runs with default settings that work for most sc
    ```bash
    snooze logs
    ```
+   
+5. **List installed plugins**:
+   ```bash
+   snooze plugins
+   ```
 
 ## Monitoring Metrics and Thresholds
 
@@ -170,6 +176,7 @@ An instance is considered idle when **all** metrics remain below their threshold
 - [Overview](docs/design/overview.md) - Project overview and architecture
 - [Data Model](docs/design/data-model.md) - Core data structures
 - [Command Structure](docs/design/command-structure.md) - CLI commands and usage
+- [Plugin Architecture](docs/design/plugin-architecture.md) - Extensible plugin system
 - [Deployment Templates](docs/design/deployment-template.md) - CloudFormation, Terraform, etc.
 - [Integration Guide](docs/integration/README.md) - API reference and integration guide
 - [Building and Packaging](docs/building/packaging.md) - Package building instructions

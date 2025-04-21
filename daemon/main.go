@@ -19,6 +19,11 @@ import (
 	"github.com/scttfrdmn/cloudsnooze/daemon/cloud/aws"
 	"github.com/scttfrdmn/cloudsnooze/daemon/common"
 	"github.com/scttfrdmn/cloudsnooze/daemon/monitor"
+	"github.com/scttfrdmn/cloudsnooze/daemon/plugin"
+	cloudplugin "github.com/scttfrdmn/cloudsnooze/daemon/plugin/cloud"
+	
+	// Import all provider plugins to ensure they register themselves
+	_ "github.com/scttfrdmn/cloudsnooze/daemon/plugin/cloud/aws"
 )
 
 var (
@@ -29,6 +34,31 @@ var (
 
 const version = "0.1.0"
 
+// initializePlugins initializes and logs information about loaded plugins
+func initializePlugins(config *Config) {
+	// Built-in plugins are self-registered via their init() functions
+	
+	// Load external plugins if enabled
+	if config != nil && config.PluginsEnabled && config.PluginsDir != "" {
+		log.Printf("Loading external plugins from %s...", config.PluginsDir)
+		if err := plugin.LoadExternalPlugins(config.PluginsDir); err != nil {
+			log.Printf("Warning: Failed to load external plugins: %v", err)
+		}
+	}
+	
+	// List all available cloud provider plugins
+	providers := cloudplugin.Registry.GetAllProviders()
+	if len(providers) == 0 {
+		log.Printf("Warning: No cloud provider plugins loaded")
+	} else {
+		log.Printf("Loaded %d cloud provider plugins:", len(providers))
+		for _, p := range providers {
+			info := p.Info()
+			log.Printf("  - %s (%s) v%s", info.Name, info.ID, info.Version)
+		}
+	}
+}
+
 func main() {
 	flag.Parse()
 
@@ -36,12 +66,15 @@ func main() {
 		fmt.Printf("CloudSnooze daemon v%s\n", version)
 		return
 	}
-
+	
 	// Load configuration
 	config, err := loadConfig(*configFile)
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
+	
+	// Initialize plugins with loaded config
+	initializePlugins(&config)
 
 	// Set up system monitor
 	systemMonitor := monitor.NewSystemMonitor(
@@ -68,20 +101,51 @@ func main() {
 		systemMonitor.SetGPUService(gpuService)
 	}
 	
-	// Set up AWS cloud provider
-	awsConfig := aws.Config{
-		Region:             config.AWSRegion,
-		EnableTags:         config.EnableInstanceTags,
-		TaggingPrefix:      config.TaggingPrefix,
-		DetailedTags:       config.DetailedInstanceTags,
-		TagPollingEnabled:  config.TagPollingEnabled,
-		TagPollingInterval: config.TagPollingIntervalSecs,
-		EnableCloudWatch:   config.Logging.EnableCloudWatch,
-		CloudWatchLogGroup: config.Logging.CloudWatchLogGroup,
+	// Set up cloud provider
+	var cloudProvider common.CloudProvider
+	var providerType cloud.ProviderType
+	
+	// Determine provider type from config or auto-detect
+	if config.ProviderType == "" {
+		// Auto-detect provider
+		log.Printf("No provider type specified, attempting auto-detection...")
+		detectedType, detectErr := cloud.DetectProvider()
+		if detectErr != nil {
+			log.Printf("Warning: Failed to auto-detect cloud provider: %v", detectErr)
+		} else {
+			providerType = detectedType
+			log.Printf("Detected cloud provider: %s", providerType)
+		}
+	} else {
+		// Use configured provider
+		providerType = cloud.ProviderType(config.ProviderType)
+		log.Printf("Using configured cloud provider: %s", providerType)
 	}
-	cloudProvider, err := cloud.CreateProvider(cloud.AWS, awsConfig)
-	if err != nil {
-		log.Printf("Warning: Failed to create cloud provider: %v", err)
+	
+	// Create provider instance based on type
+	if providerType != "" {
+		switch providerType {
+		case cloud.AWS:
+			// Set up AWS cloud provider
+			awsConfig := aws.Config{
+				Region:             config.AWSRegion,
+				EnableTags:         config.EnableInstanceTags,
+				TaggingPrefix:      config.TaggingPrefix,
+				DetailedTags:       config.DetailedInstanceTags,
+				TagPollingEnabled:  config.TagPollingEnabled,
+				TagPollingInterval: config.TagPollingIntervalSecs,
+				EnableCloudWatch:   config.Logging.EnableCloudWatch,
+				CloudWatchLogGroup: config.Logging.CloudWatchLogGroup,
+			}
+			cloudProvider, err = cloud.CreateProvider(providerType, awsConfig)
+			if err != nil {
+				log.Printf("Warning: Failed to create AWS cloud provider: %v", err)
+			}
+		default:
+			log.Printf("Warning: Unsupported cloud provider type: %s", providerType)
+		}
+	} else {
+		log.Printf("No cloud provider available, running in local mode")
 	}
 
 	// Set up API socket server
@@ -124,6 +188,21 @@ func main() {
 	// This is a type assertion to check if our provider is specifically an AWS provider
 	if provider, ok := cloudProvider.(interface{ StopTagPolling() }); ok {
 		provider.StopTagPolling()
+	}
+	
+	// Stop all running plugins
+	if config.PluginsEnabled {
+		log.Println("Stopping all plugins...")
+		providers := cloudplugin.Registry.GetAllProviders()
+		for _, p := range providers {
+			if p.IsRunning() {
+				info := p.Info()
+				log.Printf("Stopping plugin: %s (%s)", info.Name, info.ID)
+				if err := p.Stop(); err != nil {
+					log.Printf("Error stopping plugin %s: %v", info.ID, err)
+				}
+			}
+		}
 	}
 }
 
@@ -283,5 +362,27 @@ func registerCommandHandlers(server *api.SocketServer, systemMonitor *monitor.Sy
 	server.RegisterHandler("HISTORY", func(params map[string]interface{}) (interface{}, error) {
 		// TODO: Implement history retrieval
 		return []interface{}{}, nil
+	})
+	
+	// PLUGINS_LIST command
+	server.RegisterHandler("PLUGINS_LIST", func(params map[string]interface{}) (interface{}, error) {
+		providers := cloudplugin.Registry.GetAllProviders()
+		
+		var result []map[string]interface{}
+		for _, p := range providers {
+			info := p.Info()
+			result = append(result, map[string]interface{}{
+				"id":           info.ID,
+				"name":         info.Name,
+				"type":         info.Type,
+				"version":      info.Version,
+				"capabilities": info.Capabilities,
+				"author":       info.Author,
+				"website":      info.Website,
+				"is_running":   p.IsRunning(),
+			})
+		}
+		
+		return result, nil
 	})
 }

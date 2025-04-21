@@ -1,0 +1,14 @@
+{
+  "id": "aws",
+  "name": "AWS Cloud Provider",
+  "type": "cloud-provider",
+  "version": "1.0.0",
+  "capabilities": {
+    "tagging": true,
+    "tag-polling": true,
+    "restart": true
+  },
+  "author": "CloudSnooze Contributors",
+  "website": "https://github.com/scttfrdmn/cloudsnooze",
+  "dependencies": []
+}

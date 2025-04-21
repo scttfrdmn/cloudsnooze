@@ -4,14 +4,10 @@
 package cloud
 
 import (
-	"errors"
 	"fmt"
-	"net/http"
-	"os"
-	"time"
 
-	"github.com/scttfrdmn/cloudsnooze/daemon/cloud/aws"
 	"github.com/scttfrdmn/cloudsnooze/daemon/common"
+	cloudplugin "github.com/scttfrdmn/cloudsnooze/daemon/plugin/cloud"
 )
 
 // ProviderType represents a cloud provider type
@@ -27,39 +23,36 @@ const (
 )
 
 // DetectProvider attempts to detect which cloud provider we're running on
+// This is now a wrapper around the plugin-based detection for backward compatibility
 func DetectProvider() (ProviderType, error) {
-	// Check for AWS
-	if _, err := os.Stat("/sys/devices/virtual/dmi/id/product_uuid"); err == nil {
-		// Check if we can access the instance metadata service
-		client := &http.Client{Timeout: 2 * time.Second}
-		resp, err := client.Get("http://169.254.169.254/latest/meta-data")
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-				return AWS, nil
-			}
-		}
+	plugin, err := cloudplugin.Registry.DetectProvider()
+	if err != nil {
+		return "", err
 	}
-
-	// Could add detection for other providers here
 	
-	return "", errors.New("unable to detect cloud provider")
+	// Convert plugin ID to ProviderType
+	return ProviderType(plugin.Info().ID), nil
 }
 
 // CreateProvider creates a new provider of the specified type with the given config
+// This is now a wrapper around the plugin-based provider creation for backward compatibility
 func CreateProvider(providerType ProviderType, config interface{}) (common.CloudProvider, error) {
-	switch providerType {
-	case AWS:
-		awsConfig, ok := config.(aws.Config)
-		if !ok {
-			return nil, errors.New("invalid AWS configuration type")
-		}
-		return aws.NewProvider(awsConfig), nil
-	// case GCP:
-	//    return nil, errors.New("GCP provider not implemented")
-	// case Azure:
-	//    return nil, errors.New("Azure provider not implemented")
-	default:
+	// Get the provider plugin
+	plugin, exists := cloudplugin.Registry.GetProvider(string(providerType))
+	if !exists {
 		return nil, fmt.Errorf("unsupported provider type: %s", providerType)
 	}
+	
+	// Initialize the plugin if not already initialized
+	if !plugin.IsRunning() {
+		if err := plugin.Init(nil); err != nil {
+			return nil, fmt.Errorf("failed to initialize plugin: %v", err)
+		}
+		if err := plugin.Start(); err != nil {
+			return nil, fmt.Errorf("failed to start plugin: %v", err)
+		}
+	}
+	
+	// Create a provider instance
+	return plugin.CreateProvider(config)
 }

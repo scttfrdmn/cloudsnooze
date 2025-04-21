@@ -1,6 +1,3 @@
-// Copyright 2025 Scott Friedman and CloudSnooze Contributors
-// SPDX-License-Identifier: Apache-2.0
-
 package main
 
 import (
@@ -9,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/scttfrdmn/cloudsnooze/cli/cmd"
@@ -56,6 +54,8 @@ func main() {
 		handleIssue(args[1:])
 	case "debug":
 		handleDebug(args[1:])
+	case "plugins":
+		listPlugins(client, args[1:])
 	case "help":
 		printUsage()
 	default:
@@ -63,7 +63,7 @@ func main() {
 		printUsage()
 		os.Exit(1)
 	}
-
+}
 
 func printUsage() {
 	fmt.Println("Usage: snooze [options] command [args]")
@@ -78,20 +78,17 @@ func printUsage() {
 	fmt.Println("  restart      Restart the daemon")
 	fmt.Println("  issue        Create a GitHub issue")
 	fmt.Println("  debug        Generate debug information")
+	fmt.Println("  plugins      List available plugins")
 	fmt.Println("  help         Show this help message")
 	fmt.Println("\nRun 'snooze help command' for more information on a command")
-
+}
 
 func showStatus(client *api.SocketClient, args []string) {
 	// Check for json flag
 	jsonOutput := false
-	debugOutput := false
 	for _, arg := range args {
 		if arg == "--json" || arg == "-j" {
 			jsonOutput = true
-		}
-		if arg == "--debug" || arg == "-d" {
-			debugOutput = true
 		}
 	}
 	
@@ -112,8 +109,7 @@ func showStatus(client *api.SocketClient, args []string) {
 	}
 	
 	fmt.Println(formatted)
-
-
+}
 
 func handleConfig(client *api.SocketClient, args []string) {
 	if len(args) < 1 {
@@ -198,7 +194,7 @@ func handleConfig(client *api.SocketClient, args []string) {
 		fmt.Println("Usage: snooze config [list|get|set|reset|import|export]")
 		os.Exit(1)
 	}
-
+}
 
 func showHistory(client *api.SocketClient, args []string) {
 	// Parse flags for history command
@@ -296,12 +292,12 @@ func showHistory(client *api.SocketClient, args []string) {
 	} else if *format != "text" {
 		fmt.Println(string(output_data))
 	}
-
+}
 
 func controlDaemon(client *api.SocketClient, command string) {
 	// TODO: Implement daemon control
 	fmt.Printf("Command '%s' not implemented yet\n", command)
-
+}
 
 func handleIssue(args []string) {
 	// Parse flags for issue command
@@ -338,7 +334,7 @@ func handleIssue(args []string) {
 	} else {
 		fmt.Println("Issue submitted successfully!")
 	}
-
+}
 
 func handleDebug(args []string) {
 	// Parse flags for debug command
@@ -368,3 +364,93 @@ func handleDebug(args []string) {
 		fmt.Fprintf(os.Stderr, "Error generating debug information: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func listPlugins(client *api.SocketClient, args []string) {
+	// Parse flags for plugins command
+	pluginsCmd := flag.NewFlagSet("plugins", flag.ExitOnError)
+	jsonOutput := pluginsCmd.Bool("json", false, "Output in JSON format")
+	
+	if err := pluginsCmd.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		os.Exit(1)
+	}
+	
+	// If this is the help command, show usage
+	if len(args) > 0 && args[0] == "help" {
+		fmt.Println("Usage: snooze plugins [options]")
+		fmt.Println("\nOptions:")
+		pluginsCmd.PrintDefaults()
+		fmt.Println("\nExamples:")
+		fmt.Println("  snooze plugins           # List all plugins")
+		fmt.Println("  snooze plugins --json    # List plugins in JSON format")
+		return
+	}
+	
+	// Send request to daemon
+	result, err := client.SendCommand("PLUGINS_LIST", nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	
+	// Process results
+	plugins, ok := result.([]interface{})
+	if !ok {
+		fmt.Fprintf(os.Stderr, "Error: unexpected response format\n")
+		os.Exit(1)
+	}
+	
+	// Output results
+	if *jsonOutput {
+		jsonData, err := json.MarshalIndent(plugins, "", "  ")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(string(jsonData))
+		return
+	}
+	
+	// Human-readable output
+	fmt.Println("CloudSnooze Plugins")
+	fmt.Println("------------------")
+	
+	if len(plugins) == 0 {
+		fmt.Println("No plugins found")
+		return
+	}
+	
+	for i, plugin := range plugins {
+		p, ok := plugin.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		
+		fmt.Printf("%d. %s (%s) v%s\n", i+1, p["name"], p["id"], p["version"])
+		fmt.Printf("   Type: %s\n", p["type"])
+		fmt.Printf("   Author: %s\n", p["author"])
+		
+		// Display capabilities if available
+		if caps, ok := p["capabilities"].(map[string]interface{}); ok && len(caps) > 0 {
+			fmt.Printf("   Capabilities: ")
+			capList := []string{}
+			for k, v := range caps {
+				if vBool, ok := v.(bool); ok && vBool {
+					capList = append(capList, k)
+				}
+			}
+			fmt.Println(strings.Join(capList, ", "))
+		}
+		
+		// Display running status
+		isRunning, _ := p["is_running"].(bool)
+		status := "stopped"
+		if isRunning {
+			status = "running"
+		}
+		fmt.Printf("   Status: %s\n", status)
+		
+		fmt.Println()
+	}
+}
