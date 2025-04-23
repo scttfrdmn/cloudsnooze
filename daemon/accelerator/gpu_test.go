@@ -25,13 +25,9 @@ func (m *MockGPUMonitor) GetMetrics() ([]common.GPUMetrics, error) {
 }
 
 func TestGPUServiceImplementsAcceleratorInterface(t *testing.T) {
-	// This test verifies that GPUService correctly implements the AcceleratorInterface
-	var service common.AcceleratorInterface = NewGPUService()
-	
-	// If this compiles, the interface is implemented correctly
-	if service == nil {
-		t.Error("Service should not be nil")
-	}
+	// This is a compile-time check to ensure GPUService implements AcceleratorInterface
+	// No assertions needed - if it compiles, the interface is implemented correctly
+	var _ common.AcceleratorInterface = (*GPUService)(nil)
 }
 
 func TestGPUServiceInitialize(t *testing.T) {
