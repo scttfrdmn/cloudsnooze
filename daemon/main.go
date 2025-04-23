@@ -123,7 +123,7 @@ func main() {
 	}
 	
 	// Create provider instance based on type
-	if string(providerType) != "" {
+	if providerType != "" {
 		switch providerType {
 		case cloud.AWS:
 			// Set up AWS cloud provider
