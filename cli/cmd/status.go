@@ -42,14 +42,11 @@ func (c *StatusCommand) Execute(client *api.SocketClient) error {
 			return err
 		}
 
-		for {
-			select {
-			case <-ticker.C:
-				// Clear screen and show status
-				fmt.Print("\033[H\033[2J")
-				if err := c.showStatus(client); err != nil {
-					return err
-				}
+		for range ticker.C {
+			// Clear screen and show status
+			fmt.Print("\033[H\033[2J")
+			if err := c.showStatus(client); err != nil {
+				return err
 			}
 		}
 	} else {
