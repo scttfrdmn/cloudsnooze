@@ -28,7 +28,9 @@
 </p>
 <p align="center">
   <a href="https://github.com/scttfrdmn/cloudsnooze/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/scttfrdmn/cloudsnooze/build.yml?branch=main&logo=github" alt="Build Status"></a>
+  <a href="https://codecov.io/gh/scttfrdmn/cloudsnooze"><img src="https://codecov.io/gh/scttfrdmn/cloudsnooze/branch/main/graph/badge.svg" alt="Code Coverage"></a>
   <a href="https://cloudsnooze.io/docs/"><img src="https://img.shields.io/badge/docs-cloudsnooze.io-blue?logo=gitbook" alt="Documentation"></a>
+  <a href="https://goreportcard.com/report/github.com/scttfrdmn/cloudsnooze"><img src="https://goreportcard.com/badge/github.com/scttfrdmn/cloudsnooze" alt="Go Report Card"></a>
   <img src="https://img.shields.io/badge/cloud-AWS-FF9900?logo=amazon-aws" alt="Cloud Support">
   <img src="https://img.shields.io/badge/status-alpha-red" alt="Status">
   <a href="https://github.com/scttfrdmn/cloudsnooze/graphs/contributors"><img src="https://img.shields.io/github/contributors/scttfrdmn/cloudsnooze" alt="Contributors"></a>
