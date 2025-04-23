@@ -6,6 +6,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -16,46 +17,53 @@ const (
 	DefaultSocketPath = "/var/run/snooze.sock"
 )
 
-// SocketServer handles Unix socket communication
+// Request represents a command request sent to the daemon
+type Request struct {
+	Command string                 `json:"command"`
+	Params  map[string]interface{} `json:"params,omitempty"`
+}
+
+// Response represents a response from the daemon
+type Response struct {
+	Success bool        `json:"success"`
+	Data    interface{} `json:"data,omitempty"`
+	Error   string      `json:"error,omitempty"`
+}
+
+// CommandHandler is a function that handles a command request
+type CommandHandler func(params map[string]interface{}) (interface{}, error)
+
+// SocketServer handles the API socket
 type SocketServer struct {
 	listener   net.Listener
 	socketPath string
 	handlers   map[string]CommandHandler
+	running    bool
 }
 
-// CommandHandler is a function that handles a command
-type CommandHandler func(params map[string]interface{}) (interface{}, error)
-
-// Request represents an API request
-type Request struct {
-	Command string                 `json:"command"`
-	Params  map[string]interface{} `json:"params"`
+// SocketClient is a client for communicating with the socket server
+type SocketClient struct {
+	socketPath string
 }
 
-// Response represents an API response
-type Response struct {
-	Status string      `json:"status"`
-	Data   interface{} `json:"data,omitempty"`
-	Error  string      `json:"error,omitempty"`
+// NewSocketClient creates a new socket client
+func NewSocketClient(socketPath string) *SocketClient {
+	return &SocketClient{
+		socketPath: socketPath,
+	}
 }
 
 // NewSocketServer creates a new Unix socket server
 func NewSocketServer(socketPath string) (*SocketServer, error) {
-	if socketPath == "" {
-		socketPath = DefaultSocketPath
-	}
-
-	// Ensure directory exists
-	socketDir := filepath.Dir(socketPath)
-	if err := os.MkdirAll(socketDir, 0755); err != nil {
+	// Create socket directory if it doesn't exist
+	dir := filepath.Dir(socketPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create socket directory: %v", err)
 	}
 
 	// Remove socket file if it already exists
-	if _, err := os.Stat(socketPath); err == nil {
-		if err := os.Remove(socketPath); err != nil {
-			return nil, fmt.Errorf("failed to remove existing socket: %v", err)
-		}
+	if err := os.RemoveAll(socketPath); err != nil {
+		return nil, fmt.Errorf("failed to remove existing socket: %v", err)
 	}
 
 	// Create Unix socket listener
@@ -66,7 +74,10 @@ func NewSocketServer(socketPath string) (*SocketServer, error) {
 
 	// Set permissions on socket file
 	if err := os.Chmod(socketPath, 0660); err != nil {
-		listener.Close()
+		closeErr := listener.Close()
+		if closeErr != nil {
+			return nil, fmt.Errorf("failed to set socket permissions: %v, and close listener: %v", err, closeErr)
+		}
 		return nil, fmt.Errorf("failed to set socket permissions: %v", err)
 	}
 
@@ -84,18 +95,25 @@ func (s *SocketServer) RegisterHandler(command string, handler CommandHandler) {
 
 // Start starts the socket server
 func (s *SocketServer) Start() error {
-	for {
+	s.running = true
+	for s.running {
 		conn, err := s.listener.Accept()
 		if err != nil {
-			return fmt.Errorf("accept error: %v", err)
+			if !s.running {
+				return nil
+			}
+			return fmt.Errorf("error accepting connection: %v", err)
 		}
 
+		// Handle connection in a goroutine
 		go s.handleConnection(conn)
 	}
+	return nil
 }
 
 // Stop stops the socket server
 func (s *SocketServer) Stop() error {
+	s.running = false
 	if s.listener != nil {
 		return s.listener.Close()
 	}
@@ -104,7 +122,11 @@ func (s *SocketServer) Stop() error {
 
 // handleConnection processes a client connection
 func (s *SocketServer) handleConnection(conn net.Conn) {
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	// Create a decoder for the incoming JSON
 	decoder := json.NewDecoder(conn)
@@ -121,7 +143,7 @@ func (s *SocketServer) handleConnection(conn net.Conn) {
 		return
 	}
 
-	// Execute the handler
+	// Execute handler
 	result, err := handler(request.Params)
 	if err != nil {
 		sendErrorResponse(conn, err.Error())
@@ -130,40 +152,28 @@ func (s *SocketServer) handleConnection(conn net.Conn) {
 
 	// Send success response
 	response := Response{
-		Status: "success",
-		Data:   result,
+		Success: true,
+		Data:    result,
 	}
+
 	encoder := json.NewEncoder(conn)
 	if err := encoder.Encode(response); err != nil {
-		fmt.Printf("Failed to send response: %v\n", err)
+		// Not much we can do here since we've already failed to write to the connection
+		return
 	}
 }
 
 // sendErrorResponse sends an error response to the client
 func sendErrorResponse(conn net.Conn, errMsg string) {
 	response := Response{
-		Status: "error",
-		Error:  errMsg,
+		Success: false,
+		Error:   errMsg,
 	}
+
 	encoder := json.NewEncoder(conn)
 	if err := encoder.Encode(response); err != nil {
-		fmt.Printf("Failed to send error response: %v\n", err)
-	}
-}
-
-// SocketClient handles communication with the daemon
-type SocketClient struct {
-	socketPath string
-}
-
-// NewSocketClient creates a new Unix socket client
-func NewSocketClient(socketPath string) *SocketClient {
-	if socketPath == "" {
-		socketPath = DefaultSocketPath
-	}
-	
-	return &SocketClient{
-		socketPath: socketPath,
+		// We're already in an error state, so just log this
+		log.Printf("Error sending error response: %v", err)
 	}
 }
 
@@ -174,7 +184,11 @@ func (c *SocketClient) SendCommand(command string, params map[string]interface{}
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to daemon: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing client connection: %v", err)
+		}
+	}()
 	
 	// Create request
 	request := Request{
@@ -195,8 +209,8 @@ func (c *SocketClient) SendCommand(command string, params map[string]interface{}
 		return nil, fmt.Errorf("failed to read response: %v", err)
 	}
 	
-	// Check response status
-	if response.Status == "error" {
+	// Check for error
+	if !response.Success {
 		return nil, fmt.Errorf("daemon error: %s", response.Error)
 	}
 	

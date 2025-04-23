@@ -4,272 +4,320 @@
 package aws
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/scttfrdmn/cloudsnooze/daemon/common"
 )
 
 const (
-	// MetadataBaseURL is the base URL for the AWS EC2 instance metadata service
-	MetadataBaseURL = "http://169.254.169.254/latest/meta-data"
-	// InstanceIdentityURL is the URL for the instance identity document
-	InstanceIdentityURL = "http://169.254.169.254/latest/dynamic/instance-identity/document"
-	// IMDSv2 token TTL in seconds
-	tokenTTL = "60"
+	// How often to refresh the token
+	tokenTTL = "300"
 )
 
-// Config holds AWS-specific configuration
+// Config holds the AWS provider configuration
 type Config struct {
-	Region              string
-	EnableTags          bool
-	TaggingPrefix       string
-	DetailedTags        bool  // Whether to add detailed tags
-	TagPollingEnabled   bool  // Whether to poll for tags
-	TagPollingInterval  int   // How often to poll for tags (in seconds)
-	EnableCloudWatch    bool
-	CloudWatchLogGroup  string
-	EnableRestartFlag   bool  // Whether to add RestartAllowed flag
-	AllowedRestarterIDs []string // List of service IDs allowed to restart instances
+	Region             string
+	EnableTags         bool
+	TaggingPrefix      string
+	DetailedTags       bool
+	TagPollingEnabled  bool
+	TagPollingInterval int
+	EnableCloudWatch   bool
+	CloudWatchLogGroup string
 }
 
-// Provider implements the common.CloudProvider interface for AWS
-type Provider struct {
-	config Config
-	instanceInfo *common.InstanceInfo
-	// Add a channel for tag polling if needed in the future
-	tagPollingDone chan bool
+// AWSProvider is an implementation of CloudProvider for AWS
+type AWSProvider struct {
+	config     Config
+	client     *ec2.Client
+	tagPoller  *time.Ticker
+	stopTagPoll chan struct{}
+	instanceID string
+	region     string
+	instanceType string
+	lock       sync.RWMutex
 }
 
-// NewProvider creates a new AWS cloud provider
-func NewProvider(config Config) *Provider {
-	provider := &Provider{
-		config: config,
-		tagPollingDone: make(chan bool),
+// NewProvider creates a new AWS provider instance
+func NewProvider(config Config) *AWSProvider {
+	return &AWSProvider{
+		config:     config,
+		stopTagPoll: make(chan struct{}),
 	}
-	
-	// Start tag polling if enabled
-	if config.TagPollingEnabled {
-		go provider.startTagPolling()
-	}
-	
-	return provider
 }
 
-// VerifyPermissions checks if the daemon has sufficient permissions to stop instances
-func (p *Provider) VerifyPermissions() (bool, error) {
-	// Get instance info to verify IMDS access
-	_, err := p.GetInstanceInfo()
+// Initialize sets up the AWS provider
+func (p *AWSProvider) Initialize() error {
+	// Load default AWS configuration
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(p.config.Region))
 	if err != nil {
-		return false, fmt.Errorf("failed to get instance info: %v", err)
+		return fmt.Errorf("error loading AWS config: %v", err)
 	}
 
-	// TODO: Make a dry-run call to StopInstances API to verify permissions
-	// This would require implementing the AWS SDK
-	
-	// For now, just return true if we can access instance metadata
+	// Create EC2 client
+	p.client = ec2.NewFromConfig(cfg)
+
+	// Get instance ID and region info
+	if err := p.loadInstanceInfo(); err != nil {
+		return fmt.Errorf("error loading instance info: %v", err)
+	}
+
+	// Start tag polling if enabled
+	if p.config.TagPollingEnabled && p.config.TagPollingInterval > 0 {
+		interval := time.Duration(p.config.TagPollingInterval) * time.Second
+		p.tagPoller = time.NewTicker(interval)
+		go p.pollTags()
+	}
+
+	return nil
+}
+
+// StopInstance stops the EC2 instance
+func (p *AWSProvider) StopInstance(reason string, metrics common.SystemMetrics) error {
+	// Get the instance ID
+	instanceID, err := p.getInstanceID()
+	if err != nil {
+		return fmt.Errorf("error getting instance ID: %v", err)
+	}
+
+	// Apply tags if enabled
+	if p.config.EnableTags {
+		// Create basic tags
+		tags := []types.Tag{
+			{
+				Key:   aws.String(fmt.Sprintf("%s:stopped_at", p.config.TaggingPrefix)),
+				Value: aws.String(time.Now().Format(time.RFC3339)),
+			},
+			{
+				Key:   aws.String(fmt.Sprintf("%s:reason", p.config.TaggingPrefix)),
+				Value: aws.String(reason),
+			},
+		}
+
+		// Add detailed metrics tags if enabled
+		if p.config.DetailedTags {
+			tags = append(tags, 
+				types.Tag{
+					Key:   aws.String(fmt.Sprintf("%s:cpu_percent", p.config.TaggingPrefix)),
+					Value: aws.String(fmt.Sprintf("%.2f", metrics.CPUUsage)),
+				},
+				types.Tag{
+					Key:   aws.String(fmt.Sprintf("%s:memory_percent", p.config.TaggingPrefix)),
+					Value: aws.String(fmt.Sprintf("%.2f", metrics.MemoryUsage)),
+				},
+				types.Tag{
+					Key:   aws.String(fmt.Sprintf("%s:idle_time_mins", p.config.TaggingPrefix)),
+					Value: aws.String(fmt.Sprintf("%.1f", float64(metrics.IdleTime)/60.0)), // Convert from seconds to minutes
+				},
+			)
+		}
+
+		// Apply the tags
+		_, err = p.client.CreateTags(context.TODO(), &ec2.CreateTagsInput{
+			Resources: []string{instanceID},
+			Tags:      tags,
+		})
+		if err != nil {
+			// Log the error but don't fail
+			fmt.Printf("Warning: Failed to apply tags: %v\n", err)
+		}
+	}
+
+	// Stop the instance
+	_, err = p.client.StopInstances(context.TODO(), &ec2.StopInstancesInput{
+		InstanceIds: []string{instanceID},
+	})
+	return err
+}
+
+// VerifyPermissions checks if the current AWS credentials have the required permissions
+func (p *AWSProvider) VerifyPermissions() (bool, error) {
+	// Load AWS configuration
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(p.config.Region))
+	if err != nil {
+		return false, fmt.Errorf("error loading AWS config: %v", err)
+	}
+
+	// Create EC2 client
+	client := ec2.NewFromConfig(cfg)
+
+	// Check if we can describe instances
+	_, err = client.DescribeInstances(context.TODO(), &ec2.DescribeInstancesInput{
+		MaxResults: aws.Int32(5),
+	})
+	if err != nil {
+		return false, fmt.Errorf("error checking EC2 permissions: %v", err)
+	}
+
+	// If tags are enabled, verify tag permissions
+	if p.config.EnableTags {
+		instanceID, err := p.getInstanceID()
+		if err != nil {
+			return false, fmt.Errorf("error getting instance ID: %v", err)
+		}
+
+		// Try to add a test tag
+		_, err = client.CreateTags(context.TODO(), &ec2.CreateTagsInput{
+			Resources: []string{instanceID},
+			Tags: []types.Tag{
+				{
+					Key:   aws.String("cloudsnooze:test"),
+					Value: aws.String("permission-check"),
+				},
+			},
+		})
+		if err != nil {
+			return false, fmt.Errorf("error checking tag permissions: %v", err)
+		}
+
+		// Try to remove the test tag
+		_, err = client.DeleteTags(context.TODO(), &ec2.DeleteTagsInput{
+			Resources: []string{instanceID},
+			Tags: []types.Tag{
+				{
+					Key:   aws.String("cloudsnooze:test"),
+					Value: aws.String("permission-check"),
+				},
+			},
+		})
+		if err != nil {
+			return false, fmt.Errorf("error checking tag delete permissions: %v", err)
+		}
+	}
+
 	return true, nil
 }
 
-// GetInstanceInfo retrieves information about the current instance
-func (p *Provider) GetInstanceInfo() (*common.InstanceInfo, error) {
-	// Return cached info if available
-	if p.instanceInfo != nil {
-		return p.instanceInfo, nil
-	}
-
-	// Get IMDSv2 token
-	token, err := getIMDSv2Token()
+// GetInstanceInfo returns information about the current instance
+func (p *AWSProvider) GetInstanceInfo() (*common.InstanceInfo, error) {
+	instanceID, err := p.getInstanceID()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get IMDSv2 token: %v", err)
+		return nil, fmt.Errorf("error getting instance ID: %v", err)
 	}
 
-	// Get instance ID
-	instanceID, err := getMetadata(token, "instance-id")
+	// Check if we already have the instance type
+	p.lock.RLock()
+	if p.instanceType != "" {
+		info := &common.InstanceInfo{
+			ID:       instanceID,
+			Type:     p.instanceType,
+			Region:   p.region,
+			Provider: "aws",
+		}
+		p.lock.RUnlock()
+		return info, nil
+	}
+	p.lock.RUnlock()
+
+	// Get the instance type from the metadata service
+	instanceType, err := getMetadata("instance-type")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get instance ID: %v", err)
+		return nil, fmt.Errorf("error getting instance type: %v", err)
 	}
 
-	// Get instance type
-	instanceType, err := getMetadata(token, "instance-type")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get instance type: %v", err)
-	}
-
-	// Use configured region or try to get it from IMDS
+	// Get region from the metadata service if not already set
 	region := p.config.Region
 	if region == "" {
-		// This field is available in the identity document, 
-		// but we're using a simpler approach for this implementation
-		availabilityZone, err := getMetadata(token, "placement/availability-zone")
-		if err != nil {
-			return nil, fmt.Errorf("failed to get availability zone: %v", err)
-		}
-		// Region is AZ minus the last character
-		if len(availabilityZone) > 1 {
-			region = availabilityZone[:len(availabilityZone)-1]
+		// Try to get region from instance metadata
+		az, err := getMetadata("placement/availability-zone")
+		if err == nil {
+			// Convert AZ to region by removing the last character (e.g., us-west-2a -> us-west-2)
+			if len(az) > 1 {
+				region = az[:len(az)-1]
+			}
 		}
 	}
 
-	// Create and cache instance info
-	p.instanceInfo = &common.InstanceInfo{
+	// Store the values
+	p.lock.Lock()
+	p.instanceType = instanceType
+	p.region = region
+	p.lock.Unlock()
+
+	return &common.InstanceInfo{
 		ID:       instanceID,
 		Type:     instanceType,
 		Region:   region,
 		Provider: "aws",
-		Tags:     make(map[string]string),
-	}
-
-	return p.instanceInfo, nil
+	}, nil
 }
 
-// StopInstance stops the current instance
-func (p *Provider) StopInstance(reason string, metrics common.SystemMetrics) error {
-	instanceInfo, err := p.GetInstanceInfo()
+// getInstanceID returns the EC2 instance ID, caching the result
+func (p *AWSProvider) getInstanceID() (string, error) {
+	// Check if we already have the instance ID
+	p.lock.RLock()
+	if p.instanceID != "" {
+		id := p.instanceID
+		p.lock.RUnlock()
+		return id, nil
+	}
+	p.lock.RUnlock()
+
+	// Get instance ID from metadata service
+	instanceID, err := getMetadata("instance-id")
 	if err != nil {
-		return fmt.Errorf("failed to get instance info: %v", err)
+		return "", fmt.Errorf("error getting instance ID: %v", err)
 	}
 
-	// Add tags if enabled
-	if p.config.EnableTags {
-		// Base tags that are always added
-		tags := map[string]string{
-			fmt.Sprintf("%s:StopTimestamp", p.config.TaggingPrefix): time.Now().Format(time.RFC3339),
-			fmt.Sprintf("%s:StopReason", p.config.TaggingPrefix): reason,
-			fmt.Sprintf("%s:Status", p.config.TaggingPrefix): "Stopped",
-		}
-		
-		// Add restart capability if enabled
-		if p.config.EnableRestartFlag {
-			tags[fmt.Sprintf("%s:RestartAllowed", p.config.TaggingPrefix)] = "true"
-			
-			// Add allowed restarter IDs if configured
-			if len(p.config.AllowedRestarterIDs) > 0 {
-				tags[fmt.Sprintf("%s:AllowedRestarters", p.config.TaggingPrefix)] = strings.Join(p.config.AllowedRestarterIDs, ",")
-			}
-		}
-		
-		// Add detailed tags if enabled
-		if p.config.DetailedTags {
-			// Add system metrics
-			tags[fmt.Sprintf("%s:CPUPercent", p.config.TaggingPrefix)] = fmt.Sprintf("%.2f", metrics.CPUUsage)
-			tags[fmt.Sprintf("%s:MemoryPercent", p.config.TaggingPrefix)] = fmt.Sprintf("%.2f", metrics.MemoryUsage)
-			tags[fmt.Sprintf("%s:NetworkKBps", p.config.TaggingPrefix)] = fmt.Sprintf("%.2f", metrics.NetworkRate)
-			tags[fmt.Sprintf("%s:DiskIOKBps", p.config.TaggingPrefix)] = fmt.Sprintf("%.2f", metrics.DiskIORate)
-			tags[fmt.Sprintf("%s:IdleTime", p.config.TaggingPrefix)] = fmt.Sprintf("%d", metrics.IdleTime)
-			
-			// Add GPU metrics if available
-			if len(metrics.GPUMetrics) > 0 {
-				// Summarize GPU metrics - average utilization of all GPUs
-				var totalGPUUtil float64
-				for _, gpu := range metrics.GPUMetrics {
-					totalGPUUtil += gpu.Utilization
-				}
-				avgGPUUtil := totalGPUUtil / float64(len(metrics.GPUMetrics))
-				tags[fmt.Sprintf("%s:GPUPercent", p.config.TaggingPrefix)] = fmt.Sprintf("%.2f", avgGPUUtil)
-				tags[fmt.Sprintf("%s:GPUCount", p.config.TaggingPrefix)] = fmt.Sprintf("%d", len(metrics.GPUMetrics))
-			}
-			
-			// System information
-			tags[fmt.Sprintf("%s:NaptimeMinutes", p.config.TaggingPrefix)] = fmt.Sprintf("%d", p.config.TagPollingInterval/60)
-			// This is a placeholder since we don't have this info in the Provider struct
-			// In a real implementation, this would come from the config
-			tags[fmt.Sprintf("%s:InstanceType", p.config.TaggingPrefix)] = instanceInfo.Type
-			tags[fmt.Sprintf("%s:Region", p.config.TaggingPrefix)] = instanceInfo.Region
-		}
-		
-		// Tag the instance before stopping it
-		if err := p.TagInstance(tags); err != nil {
-			// Log but continue with stopping
-			fmt.Printf("Warning: Failed to tag instance: %v\n", err)
-		}
+	// Store the instance ID
+	p.lock.Lock()
+	p.instanceID = instanceID
+	p.lock.Unlock()
+
+	return instanceID, nil
+}
+
+// loadInstanceInfo loads instance information from the AWS metadata service
+func (p *AWSProvider) loadInstanceInfo() error {
+	// Get instance ID
+	instanceID, err := getMetadata("instance-id")
+	if err != nil {
+		return fmt.Errorf("error getting instance ID: %v", err)
 	}
 
-	// TODO: Implement actual instance stopping using AWS SDK
-	// For now, log what we would do
-	fmt.Printf("Would stop AWS EC2 instance %s (type: %s) in region %s with reason: %s\n", 
-		instanceInfo.ID, instanceInfo.Type, instanceInfo.Region, reason)
+	// Get instance type
+	instanceType, err := getMetadata("instance-type")
+	if err != nil {
+		return fmt.Errorf("error getting instance type: %v", err)
+	}
+
+	// Get availability zone and derive region
+	az, err := getMetadata("placement/availability-zone")
+	if err != nil {
+		return fmt.Errorf("error getting availability zone: %v", err)
+	}
+
+	// Convert AZ to region by removing the last character (e.g., us-west-2a -> us-west-2)
+	var region string
+	if len(az) > 1 {
+		region = az[:len(az)-1]
+	}
+
+	// Store the values
+	p.lock.Lock()
+	p.instanceID = instanceID
+	p.instanceType = instanceType
+	p.region = region
+	p.lock.Unlock()
 
 	return nil
 }
 
-// TagInstance adds tags to the current instance
-func (p *Provider) TagInstance(tags map[string]string) error {
-	instanceInfo, err := p.GetInstanceInfo()
-	if err != nil {
-		return fmt.Errorf("failed to get instance info: %v", err)
-	}
-
-	// TODO: Implement actual tagging using AWS SDK
-	// For now, log what we would do
-	fmt.Printf("Would add the following tags to instance %s:\n", instanceInfo.ID)
-	for key, value := range tags {
-		fmt.Printf("  %s: %s\n", key, value)
-	}
-
-	return nil
-}
-
-// GetExternalTags checks for tags from external systems that might control this instance
-func (p *Provider) GetExternalTags() (map[string]string, error) {
-	instanceInfo, err := p.GetInstanceInfo()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get instance info: %v", err)
-	}
-
-	// TODO: Implement actual tag retrieval using AWS SDK
-	// For now, return empty tags
-	fmt.Printf("Would check for external tags on instance %s\n", instanceInfo.ID)
-	
-	// In a real implementation, this would call DescribeTags API
-	// and filter for tags with external tool prefixes
-	
-	return make(map[string]string), nil
-}
-
-// startTagPolling starts a goroutine to poll for external tags
-func (p *Provider) startTagPolling() {
-	ticker := time.NewTicker(time.Duration(p.config.TagPollingInterval) * time.Second)
-	defer ticker.Stop()
-	
-	fmt.Printf("Starting tag polling every %d seconds\n", p.config.TagPollingInterval)
-	
-	for {
-		select {
-		case <-p.tagPollingDone:
-			fmt.Println("Stopping tag polling")
-			return
-		case <-ticker.C:
-			tags, err := p.GetExternalTags()
-			if err != nil {
-				fmt.Printf("Error polling for tags: %v\n", err)
-				continue
-			}
-			
-			// Process external tags
-			if len(tags) > 0 {
-				fmt.Printf("Found %d external tags\n", len(tags))
-				// Handle commands from external systems
-				// This could include wake-up commands, status changes, etc.
-			}
-		}
-	}
-}
-
-// StopTagPolling stops the tag polling goroutine
-func (p *Provider) StopTagPolling() {
-	if p.config.TagPollingEnabled {
-		p.tagPollingDone <- true
-	}
-}
-
-// getIMDSv2Token gets a token for IMDSv2 requests
-func getIMDSv2Token() (string, error) {
-	req, err := http.NewRequest(http.MethodPut, "http://169.254.169.254/latest/api/token", nil)
+// getIMDSToken gets a token for IMDSv2
+func getIMDSToken() (string, error) {
+	// Create a request to get the token
+	req, err := http.NewRequest("PUT", "http://169.254.169.254/latest/api/token", nil)
 	if err != nil {
 		return "", err
 	}
@@ -280,7 +328,11 @@ func getIMDSv2Token() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("Error closing response body: %v", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("failed to get IMDSv2 token, status: %d", resp.StatusCode)
@@ -294,11 +346,16 @@ func getIMDSv2Token() (string, error) {
 	return string(token), nil
 }
 
-// getMetadata gets metadata from the instance metadata service
-func getMetadata(token, path string) (string, error) {
-	url := fmt.Sprintf("%s/%s", MetadataBaseURL, path)
-	
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+// getMetadata gets a value from the EC2 instance metadata service
+func getMetadata(path string) (string, error) {
+	// Get token for IMDSv2
+	token, err := getIMDSToken()
+	if err != nil {
+		return "", err
+	}
+
+	// Create a request with the token
+	req, err := http.NewRequest("GET", "http://169.254.169.254/latest/meta-data/"+path, nil)
 	if err != nil {
 		return "", err
 	}
@@ -309,7 +366,11 @@ func getMetadata(token, path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("Error closing response body: %v", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("failed to get metadata at path %s, status: %d", path, resp.StatusCode)
@@ -323,15 +384,117 @@ func getMetadata(token, path string) (string, error) {
 	return strings.TrimSpace(string(data)), nil
 }
 
-// AWSFactory implements the factory for creating AWS providers
-type AWSFactory struct{}
+// pollTags periodically checks for tags that might control the behavior of the daemon
+func (p *AWSProvider) pollTags() {
+	for {
+		select {
+		case <-p.tagPoller.C:
+			// Get instance ID
+			instanceID, err := p.getInstanceID()
+			if err != nil {
+				fmt.Printf("Error in tag polling: %v\n", err)
+				continue
+			}
 
-// CreateProvider creates an AWS provider with the given config
-func (f *AWSFactory) CreateProvider(config interface{}) (common.CloudProvider, error) {
-	awsConfig, ok := config.(Config)
-	if !ok {
-		return nil, errors.New("invalid AWS configuration")
+			// Filter for the tags we're interested in
+			tagFilter := fmt.Sprintf("%s:*", p.config.TaggingPrefix)
+
+			// Get the instance tags
+			result, err := p.client.DescribeTags(context.TODO(), &ec2.DescribeTagsInput{
+				Filters: []types.Filter{
+					{
+						Name:   aws.String("resource-id"),
+						Values: []string{instanceID},
+					},
+					{
+						Name:   aws.String("key"),
+						Values: []string{tagFilter},
+					},
+				},
+			})
+			if err != nil {
+				fmt.Printf("Error getting tags: %v\n", err)
+				continue
+			}
+
+			// Process tags - this is a placeholder, add real tag handling logic here
+			for _, tag := range result.Tags {
+				if tag.Key != nil && tag.Value != nil {
+					fmt.Printf("Found tag: %s = %s\n", *tag.Key, *tag.Value)
+					// TODO: Implement actual tag handling logic
+					// For example, if there's a tag like "cloudsnooze:disable", pause monitoring
+				}
+			}
+
+		case <-p.stopTagPoll:
+			// Stop was requested
+			if p.tagPoller != nil {
+				p.tagPoller.Stop()
+				p.tagPoller = nil
+			}
+			return
+		}
+	}
+}
+
+// StopTagPolling stops the tag polling goroutine
+func (p *AWSProvider) StopTagPolling() {
+	if p.tagPoller != nil {
+		p.stopTagPoll <- struct{}{}
+	}
+}
+
+// TagInstance adds tags to the current instance
+func (p *AWSProvider) TagInstance(tags map[string]string) error {
+	instanceID, err := p.getInstanceID()
+	if err != nil {
+		return fmt.Errorf("error getting instance ID: %v", err)
 	}
 	
-	return NewProvider(awsConfig), nil
+	// Convert map to EC2 tag format
+	var ec2Tags []types.Tag
+	for k, v := range tags {
+		ec2Tags = append(ec2Tags, types.Tag{
+			Key:   aws.String(k),
+			Value: aws.String(v),
+		})
+	}
+	
+	// Apply the tags
+	_, err = p.client.CreateTags(context.TODO(), &ec2.CreateTagsInput{
+		Resources: []string{instanceID},
+		Tags:      ec2Tags,
+	})
+	return err
+}
+
+// GetExternalTags checks for tags from external systems that might control this instance
+func (p *AWSProvider) GetExternalTags() (map[string]string, error) {
+	instanceID, err := p.getInstanceID()
+	if err != nil {
+		return nil, fmt.Errorf("error getting instance ID: %v", err)
+	}
+	
+	// Get all tags for the instance
+	result, err := p.client.DescribeTags(context.TODO(), &ec2.DescribeTagsInput{
+		Filters: []types.Filter{
+			{
+				Name:   aws.String("resource-id"),
+				Values: []string{instanceID},
+			},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error getting tags: %v", err)
+	}
+	
+	// Convert to map
+	tags := make(map[string]string)
+	for _, tag := range result.Tags {
+		if tag.Key != nil && tag.Value != nil {
+			tags[*tag.Key] = *tag.Value
+		}
+	}
+	
+	return tags, nil
 }
