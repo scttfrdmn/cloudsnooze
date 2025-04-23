@@ -55,11 +55,19 @@ jobs:
         cd cli
         go test -v ./...
 
-    - name: Lint Go Code
+    - name: Lint Go Code for CLI
       uses: golangci/golangci-lint-action@v3
       with:
         version: latest
         args: --timeout=5m
+        working-directory: cli
+
+    - name: Lint Go Code for Daemon
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
+        args: --timeout=5m
+        working-directory: daemon
 
   build-cross-platform:
     name: Build Cross-Platform
@@ -114,7 +122,7 @@ jobs:
         cd ..
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: binaries-${{ matrix.suffix }}
         path: dist/
