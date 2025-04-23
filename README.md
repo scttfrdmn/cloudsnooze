@@ -22,7 +22,7 @@
 <p align="center">
   <a href="https://github.com/scttfrdmn/cloudsnooze/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License"></a>
   <a href="https://github.com/scttfrdmn/cloudsnooze/releases"><img src="https://img.shields.io/badge/version-v0.1.0--alpha-orange" alt="Version"></a>
-  <a href="https://go.dev/dl/"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go" alt="Go Version"></a>
+  <a href="https://go.dev/dl/"><img src="https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go" alt="Go Version"></a>
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS-lightgrey" alt="Platform">
   <img src="https://img.shields.io/badge/architecture-x86__64%20%7C%20ARM64-green" alt="Architecture">
 </p>
