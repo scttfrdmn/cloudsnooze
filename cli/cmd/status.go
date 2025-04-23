@@ -49,6 +49,7 @@ func (c *StatusCommand) Execute(client *api.SocketClient) error {
 				return err
 			}
 		}
+		return nil // This line was missing
 	} else {
 		// Single display
 		return c.showStatus(client)
