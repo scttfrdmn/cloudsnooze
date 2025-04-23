@@ -27,7 +27,7 @@ const (
 func DetectProvider() (ProviderType, error) {
 	plugin, err := cloudplugin.Registry.DetectProvider()
 	if err != nil {
-		return "", err
+		return ProviderType(""), err
 	}
 	
 	// Convert plugin ID to ProviderType
