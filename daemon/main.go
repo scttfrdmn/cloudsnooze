@@ -186,8 +186,10 @@ func main() {
 	
 	// Stop tag polling if the provider supports it
 	// This is a type assertion to check if our provider is specifically an AWS provider
-	if provider, ok := cloudProvider.(interface{ StopTagPolling() }); ok {
-		provider.StopTagPolling()
+	if cloudProvider != nil {
+		if provider, ok := cloudProvider.(interface{ StopTagPolling() }); ok {
+			provider.StopTagPolling()
+		}
 	}
 	
 	// Stop all running plugins
