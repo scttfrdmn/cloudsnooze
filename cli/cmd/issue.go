@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -93,7 +94,9 @@ func collectEnvironmentInfo() (map[string]string, error) {
 
 	// Get OS information
 	env["OS"] = runtime.GOOS
-	if runtime.GOOS == "linux" {
+	
+	switch runtime.GOOS {
+	case "linux":
 		// Try to get Linux distribution
 		cmd := exec.Command("lsb_release", "-d")
 		output, err := cmd.Output()
@@ -105,7 +108,7 @@ func collectEnvironmentInfo() (map[string]string, error) {
 				env["OS"] = distro
 			}
 		}
-	} else if runtime.GOOS == "darwin" {
+	case "darwin":
 		// Get macOS version
 		cmd := exec.Command("sw_vers", "-productVersion")
 		output, err := cmd.Output()
@@ -113,7 +116,7 @@ func collectEnvironmentInfo() (map[string]string, error) {
 			version := strings.TrimSpace(string(output))
 			env["OS"] = "macOS " + version
 		}
-	} else if runtime.GOOS == "windows" {
+	case "windows":
 		// Get Windows version
 		cmd := exec.Command("powershell", "-Command", "(Get-WmiObject -class Win32_OperatingSystem).Caption")
 		output, err := cmd.Output()
@@ -193,7 +196,11 @@ func getAwsInstanceType() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Printf("Error closing response body: %v", closeErr)
+		}
+	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
