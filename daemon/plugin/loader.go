@@ -13,11 +13,10 @@ import (
 
 // ExternalPlugin provides access to dynamically loaded Go plugins
 type ExternalPlugin struct {
-	path        string
-	goPlugin    *plugin.Plugin
-	pluginInfo  PluginInfo
-	pluginImpl  Plugin
-	initialized bool
+	path       string
+	goPlugin   *plugin.Plugin
+	pluginInfo PluginInfo
+	pluginImpl Plugin
 }
 
 // LoadPluginFromFile loads a plugin from a Go plugin file (.so)

@@ -17,9 +17,8 @@ import (
 
 // AWSPlugin implements the CloudProviderPlugin interface for AWS
 type AWSPlugin struct {
-	initialized bool
-	running     bool
-	config      interface{}
+	running bool
+	config  interface{}
 }
 
 // Ensure AWSPlugin implements required interfaces
@@ -51,15 +50,11 @@ func (p *AWSPlugin) Info() plugin.PluginInfo {
 // Init initializes the plugin
 func (p *AWSPlugin) Init(config interface{}) error {
 	p.config = config
-	p.initialized = true
 	return nil
 }
 
 // Start starts the plugin
 func (p *AWSPlugin) Start() error {
-	if !p.initialized {
-		return errors.New("plugin not initialized")
-	}
 	p.running = true
 	return nil
 }
@@ -77,10 +72,6 @@ func (p *AWSPlugin) IsRunning() bool {
 
 // CreateProvider creates a new AWS provider instance
 func (p *AWSPlugin) CreateProvider(config interface{}) (common.CloudProvider, error) {
-	if !p.initialized {
-		return nil, errors.New("plugin not initialized")
-	}
-	
 	awsConfig, ok := config.(aws.Config)
 	if !ok {
 		return nil, errors.New("invalid AWS configuration")
