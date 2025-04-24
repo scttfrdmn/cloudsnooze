@@ -5,6 +5,24 @@
 
 set -e
 
+PROFILE_OPTION=""
+
+# Process command line arguments
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --profile)
+      PROFILE_OPTION="--profile $2"
+      echo "Using AWS profile: $2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Usage: $0 [--profile PROFILE_NAME]"
+      exit 1
+      ;;
+  esac
+done
+
 echo "CloudSnooze GitHub OIDC Setup for AWS Integration Testing"
 echo "========================================================"
 echo
@@ -41,13 +59,13 @@ echo "GitHub Repository: $REPO"
 
 # Check AWS authentication
 echo "Checking AWS authentication..."
-if ! aws sts get-caller-identity &> /dev/null; then
+if ! aws $PROFILE_OPTION sts get-caller-identity &> /dev/null; then
     echo "Error: Not authenticated with AWS. Run 'aws configure' first."
     exit 1
 fi
 
 echo "Successfully authenticated with AWS."
-ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+ACCOUNT_ID=$(aws $PROFILE_OPTION sts get-caller-identity --query "Account" --output text)
 echo "AWS Account ID: $ACCOUNT_ID"
 
 echo
@@ -66,17 +84,30 @@ fi
 
 # Get AWS region
 read -p "AWS Region [us-west-2]: " AWS_REGION
-AWS_REGION=${AWS_REGION:-us-west-2}
+if [[ -z "$AWS_REGION" ]]; then
+  # Try to get region from profile if available
+  if [[ -n "$PROFILE_OPTION" ]]; then
+    PROFILE_REGION=$(aws $PROFILE_OPTION configure get region 2>/dev/null)
+    if [[ -n "$PROFILE_REGION" ]]; then
+      AWS_REGION=$PROFILE_REGION
+      echo "Using region from AWS profile: $AWS_REGION"
+    else
+      AWS_REGION="us-west-2"
+    fi
+  else
+    AWS_REGION="us-west-2"
+  fi
+fi
 
 # Step 1: Create IAM OIDC provider
 echo
 echo "Creating IAM OIDC provider for GitHub Actions..."
 
 # Check if provider already exists
-if aws iam list-open-id-connect-providers | grep -q "token.actions.githubusercontent.com"; then
+if aws $PROFILE_OPTION iam list-open-id-connect-providers | grep -q "token.actions.githubusercontent.com"; then
     echo "OIDC provider for GitHub Actions already exists."
 else
-    aws iam create-open-id-connect-provider \
+    aws $PROFILE_OPTION iam create-open-id-connect-provider \
         --url https://token.actions.githubusercontent.com \
         --client-id-list sts.amazonaws.com \
         --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
@@ -157,39 +188,39 @@ echo "Creating IAM role: $ROLE_NAME..."
 
 # Check if role exists
 ROLE_EXISTS=false
-if aws iam get-role --role-name $ROLE_NAME &> /dev/null; then
+if aws $PROFILE_OPTION iam get-role --role-name $ROLE_NAME &> /dev/null; then
     ROLE_EXISTS=true
     echo "Role $ROLE_NAME already exists. Updating trust policy..."
-    aws iam update-assume-role-policy --role-name $ROLE_NAME --policy-document file:///tmp/trust-policy.json
+    aws $PROFILE_OPTION iam update-assume-role-policy --role-name $ROLE_NAME --policy-document file:///tmp/trust-policy.json
 else
     echo "Creating new role $ROLE_NAME..."
-    aws iam create-role --role-name $ROLE_NAME --assume-role-policy-document file:///tmp/trust-policy.json
+    aws $PROFILE_OPTION iam create-role --role-name $ROLE_NAME --assume-role-policy-document file:///tmp/trust-policy.json
 fi
 
 # Step 5: Create and attach policy
 POLICY_NAME="CloudSnoozeTestPolicy"
-if ! $ROLE_EXISTS || ! aws iam list-attached-role-policies --role-name $ROLE_NAME --query "AttachedPolicies[?PolicyName=='$POLICY_NAME'].PolicyArn" --output text | grep -q "arn:aws"; then
+if ! $ROLE_EXISTS || ! aws $PROFILE_OPTION iam list-attached-role-policies --role-name $ROLE_NAME --query "AttachedPolicies[?PolicyName=='$POLICY_NAME'].PolicyArn" --output text | grep -q "arn:aws"; then
     echo "Creating and attaching policy $POLICY_NAME..."
     
     # Check if policy exists
-    POLICY_ARN=$(aws iam list-policies --query "Policies[?PolicyName=='$POLICY_NAME'].Arn" --output text)
+    POLICY_ARN=$(aws $PROFILE_OPTION iam list-policies --query "Policies[?PolicyName=='$POLICY_NAME'].Arn" --output text)
     
     if [[ -z "$POLICY_ARN" || "$POLICY_ARN" == "None" ]]; then
-        POLICY_ARN=$(aws iam create-policy --policy-name $POLICY_NAME --policy-document file:///tmp/permissions-policy.json --query "Policy.Arn" --output text)
+        POLICY_ARN=$(aws $PROFILE_OPTION iam create-policy --policy-name $POLICY_NAME --policy-document file:///tmp/permissions-policy.json --query "Policy.Arn" --output text)
         echo "Created policy: $POLICY_ARN"
     else
         echo "Policy $POLICY_NAME already exists with ARN: $POLICY_ARN"
     fi
     
     # Attach policy to role
-    aws iam attach-role-policy --role-name $ROLE_NAME --policy-arn $POLICY_ARN
+    aws $PROFILE_OPTION iam attach-role-policy --role-name $ROLE_NAME --policy-arn $POLICY_ARN
     echo "Attached policy to role $ROLE_NAME"
 else
     echo "Policy $POLICY_NAME is already attached to role $ROLE_NAME"
 fi
 
 # Step 6: Get role ARN
-ROLE_ARN=$(aws iam get-role --role-name $ROLE_NAME --query "Role.Arn" --output text)
+ROLE_ARN=$(aws $PROFILE_OPTION iam get-role --role-name $ROLE_NAME --query "Role.Arn" --output text)
 echo "Role ARN: $ROLE_ARN"
 
 # Step 7: Set GitHub secrets
