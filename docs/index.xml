@@ -49,7 +49,7 @@ SPDX-License-Identifier: Apache-2.0
 &lt;p>The packaging scripts in &lt;code>/packaging&lt;/code> directory automate the build process:&lt;/p>
 &lt;h3 id="prerequisites">Prerequisites&lt;/h3>
 &lt;ul>
-&lt;li>Go 1.16 or later&lt;/li>
+&lt;li>Go 1.24 or later&lt;/li>
 &lt;li>Required for DEB: &lt;code>dpkg-deb&lt;/code>&lt;/li>
 &lt;li>Required for RPM: &lt;code>rpmbuild&lt;/code>&lt;/li>
 &lt;/ul>
