@@ -34,15 +34,25 @@ jobs:
         with:
           go-version: '1.24.x'
       
-      - name: Configure AWS credentials
+      # There are two possible authentication methods:
+      # 1. OIDC Authentication (preferred, more secure) - set AWS_ROLE_ARN
+      # 2. Access Key Authentication - set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+      
+      # Choose the appropriate step based on which secrets are available
+      - name: Configure AWS credentials with OIDC
+        if: secrets.AWS_ROLE_ARN != ''
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          # Use GitHub OIDC for secure authentication (recommended)
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-west-2
-          # Alternative method using access keys (less secure but simpler)
-          # aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          # aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-west-2' }}
+
+      - name: Configure AWS credentials with Access Keys
+        if: secrets.AWS_ROLE_ARN == ''
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-west-2' }}
       
       - name: Create temporary test resources
         run: |
@@ -52,7 +62,7 @@ jobs:
           
           # Create a small t2.micro instance for testing
           INSTANCE_ID=$(aws ec2 run-instances \
-            --image-id ami-0c55b159cbfafe1f0 \
+            --image-id ami-0c2b8ca1dad447f8a \
             --instance-type t2.micro \
             --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=cloudsnooze-test-$TEST_ID},{Key=Purpose,Value=Testing},{Key=AutoDelete,Value=true}]" \
             --query 'Instances[0].InstanceId' \

@@ -50,13 +50,8 @@ fi
 read -p "AWS Region [us-west-2]: " AWS_REGION
 AWS_REGION=${AWS_REGION:-us-west-2}
 
-# Optional OIDC Role ARN
-echo
-echo "For enhanced security, you can use GitHub's OIDC provider instead of access keys."
-echo "If you've already set up an IAM role for GitHub Actions, enter its ARN below."
-echo "Otherwise, leave blank to use the access key authentication method."
-echo
-read -p "AWS Role ARN (optional): " AWS_ROLE_ARN
+# This script only configures access key authentication
+# For OIDC setup, please refer to the aws_integration_setup_oidc.md guide
 
 # Confirm before proceeding
 echo
@@ -64,9 +59,6 @@ echo "The following GitHub secrets will be created or updated:"
 echo "- AWS_ACCESS_KEY_ID"
 echo "- AWS_SECRET_ACCESS_KEY"
 echo "- AWS_REGION: $AWS_REGION"
-if [[ -n "$AWS_ROLE_ARN" ]]; then
-    echo "- AWS_ROLE_ARN: $AWS_ROLE_ARN"
-fi
 echo
 
 read -p "Do you want to continue? (y/n) " -n 1 -r
@@ -88,17 +80,13 @@ echo "$AWS_SECRET_ACCESS_KEY" | gh secret set AWS_SECRET_ACCESS_KEY
 echo "Adding AWS_REGION..."
 echo "$AWS_REGION" | gh secret set AWS_REGION
 
-if [[ -n "$AWS_ROLE_ARN" ]]; then
-    echo "Adding AWS_ROLE_ARN..."
-    echo "$AWS_ROLE_ARN" | gh secret set AWS_ROLE_ARN
-fi
 
 echo
 echo "GitHub secrets have been successfully set up!"
 echo
 echo "Next steps:"
-echo "1. Create AWS test resources using CloudFormation (see aws_integration_setup.md)"
+echo "1. Create AWS test resources using CloudFormation (see docs/testing/aws_integration_setup_access_keys.md)"
 echo "2. Verify the GitHub Actions workflow runs successfully"
 echo "3. Test locally with 'go test -tags=integration ./daemon/cloud/aws/...'"
 echo
-echo "For more information, see the docs/testing/aws_integration_setup.md document."
+echo "For more information, see the docs/testing/aws_integration_setup_access_keys.md document."

@@ -5,110 +5,137 @@ SPDX-License-Identifier: Apache-2.0
 
 # AWS Integration Testing for CloudSnooze
 
-This document explains how to set up and run AWS integration tests for CloudSnooze.
+This document explains how to run AWS integration tests for CloudSnooze.
 
-## Setup Overview
+## Overview
 
-CloudSnooze uses AWS integration tests to verify that cloud provider functionality works correctly. The setup process creates:
+CloudSnooze includes integration tests that verify its AWS functionality works correctly in a real AWS environment. This document explains how to run these tests both locally and in CI/CD pipelines.
 
-1. An IAM user with limited permissions for testing
-2. Budget alerts to prevent unexpected charges
-3. GitHub repository secrets for secure credential storage
-4. Automated cleanup of test resources
+## Authentication Methods
 
-## Prerequisites
+We support two methods for authenticating with AWS:
 
-Before running the setup script, ensure you have:
+1. **OIDC Authentication** (recommended): Uses GitHub's OIDC provider to get temporary AWS credentials. This is more secure and doesn't require storing long-lived access keys.
 
-- AWS CLI installed and configured with administrative permissions
-- GitHub CLI installed and authenticated to your repository
-- jq installed for JSON processing
+2. **Access Key Authentication**: Uses traditional IAM user access keys. This is simpler to set up but less secure.
 
-## Automated Setup
-
-We provide a script to automate most of the setup process:
-
-```bash
-# Run the setup script
-./scripts/setup_aws_testing.sh
-```
-
-The script will:
-1. Check prerequisites
-2. Create an IAM user for GitHub Actions
-3. Set up GitHub repository secrets
-4. Provide templates for budget alerts
-5. Create a CloudFormation template for test resource cleanup
-
-## Manual Steps
-
-Some steps require manual intervention:
-
-### 1. Creating an AWS Organization (Optional)
-
-For better isolation, consider using AWS Organizations to create a dedicated test account:
-
-1. Sign in to your main AWS account
-2. Navigate to AWS Organizations
-3. Create a new member account for testing
-4. Use "Switch Role" to access the test account
-
-### 2. Setting Up Budget Alerts
-
-The setup script creates a template but you need to manually create the budget:
-
-1. Go to AWS Billing console: https://console.aws.amazon.com/billing/home#/budgets/create
-2. Upload the configuration from `scripts/cloudsnooze_test_budget.json`
-3. Verify notification emails are correct
-
-### 3. Deploying the Cleanup Lambda
-
-Deploy the CloudFormation stack for automated cleanup:
-
-```bash
-aws cloudformation deploy \
-  --template-file scripts/cleanup_lambda.yaml \
-  --stack-name cloudsnooze-test-cleanup \
-  --capabilities CAPABILITY_IAM
-```
+For detailed setup instructions, see:
+- [AWS Integration Setup with OIDC](aws_integration_setup_oidc.md)
+- [AWS Integration Setup with Access Keys](aws_integration_setup_access_keys.md)
 
 ## Running Integration Tests
 
-Integration tests are tagged with `integration` and excluded from normal test runs.
+### In GitHub Actions
 
-### Running Locally
+Integration tests will automatically run on:
+- Pull requests with the `aws-test` label
+- Branches with commit messages containing `[aws-test]`
+- Manual workflow dispatches
 
-To run integration tests locally:
+To manually trigger the tests:
+1. Go to the GitHub repository
+2. Navigate to Actions → AWS Integration Tests
+3. Click "Run workflow"
+4. Select the branch to test
+5. Click "Run workflow"
 
-```bash
-# Set AWS credentials
-export AWS_ACCESS_KEY_ID=your_access_key
-export AWS_SECRET_ACCESS_KEY=your_secret_key
-export AWS_REGION=us-west-2
+### Locally
 
-# Run integration tests
-cd daemon/cloud/aws
-go test -v -tags=integration ./...
+To run integration tests on your local machine:
+
+1. Set up AWS credentials:
+   ```bash
+   # For access key authentication
+   export AWS_ACCESS_KEY_ID=your_access_key_id
+   export AWS_SECRET_ACCESS_KEY=your_secret_access_key
+   export AWS_REGION=us-west-2
+   
+   # OR for OIDC (requires additional setup)
+   # See aws_integration_setup_oidc.md for details
+   ```
+
+2. Create a test instance:
+   ```bash
+   # Create a temporary EC2 instance for testing
+   INSTANCE_ID=$(aws ec2 run-instances \
+     --image-id ami-0c2b8ca1dad447f8a \
+     --instance-type t2.micro \
+     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=cloudsnooze-local-test},{Key=Purpose,Value=Testing}]" \
+     --query 'Instances[0].InstanceId' \
+     --output text)
+   
+   # Export required environment variables
+   export CLOUDSNOOZE_TEST_INSTANCE_ID=$INSTANCE_ID
+   export CLOUDSNOOZE_TEST_REGION=us-west-2
+   ```
+
+3. Run the tests:
+   ```bash
+   cd daemon/cloud/aws
+   go test -v -tags=integration ./...
+   ```
+
+4. Clean up:
+   ```bash
+   # Terminate the test instance
+   aws ec2 terminate-instances --instance-ids $INSTANCE_ID
+   ```
+
+## Test Tags
+
+Integration tests are tagged with `integration` using Go build tags:
+
+```go
+//go:build integration
+// +build integration
 ```
 
-### GitHub Actions Workflow
+This ensures they only run when explicitly requested with `-tags=integration`.
 
-The integration tests will run automatically on pull requests with the `aws-test` label or when manually triggered via the GitHub Actions UI.
+## Resource Cleanup
 
-## Security Considerations
+All test resources are tagged with `Purpose: Testing`. These resources are cleaned up in several ways:
 
-- **Resource Limits**: All test resources are tagged with `Purpose: Testing` and automatically cleaned up
-- **Permission Boundaries**: The IAM user has minimal permissions required for testing
-- **Cost Control**: Budget alerts prevent unexpected charges
-- **Secret Management**: Credentials are stored securely in GitHub Secrets
+1. **Immediate cleanup**: The GitHub Actions workflow automatically cleans up resources after tests complete (even if tests fail).
+
+2. **Scheduled cleanup**: A Lambda function runs hourly to clean up any test resources older than 2 hours.
+
+3. **Manual cleanup**: You can clean up all test resources manually:
+   ```bash
+   aws ec2 describe-instances --filters "Name=tag:Purpose,Values=Testing" --query "Reservations[].Instances[].InstanceId" --output text | xargs -n1 aws ec2 terminate-instances --instance-ids
+   ```
+
+## Cost Control
+
+To prevent unexpected costs:
+
+1. **Testing quotas**: The IAM policy is restricted to only allow t2.micro instances.
+
+2. **Budget alerts**: Set up AWS budget alerts to notify you if costs exceed expected thresholds.
+
+3. **Resource tagging**: All test resources are tagged for identification and automated cleanup.
 
 ## Troubleshooting
 
-If you encounter issues with AWS integration tests:
+Common issues and solutions:
 
-1. **Permission Errors**: Verify the IAM user has the correct permissions
-2. **Timeout Errors**: Check if AWS resource creation is taking too long
-3. **Cleanup Failures**: Manually verify and terminate any lingering test resources
-4. **GitHub Secrets**: Ensure secrets are correctly configured in the repository
+1. **Credentials Issues**:
+   - For access keys: Check secrets are properly configured
+   - For OIDC: Verify the trust relationship and role permissions
 
-For more help, see the AWS CloudShell Guide in the CloudSnooze documentation.
+2. **Instance Creation Failures**:
+   - Check the AMI exists in your region
+   - Verify service quotas aren't exceeded
+   - Use a different region if experiencing capacity issues
+
+3. **Timeout Issues**:
+   - AWS operations may sometimes be slow
+   - Increase timeout values in test code if necessary
+
+## Comparing Local vs CI Test Results
+
+If you see tests passing locally but failing in CI (or vice versa):
+
+1. **Check region differences**: Different regions may have different behavior
+2. **Check credentials**: Ensure permissions are identical
+3. **Examine logs**: Look for differences in instance properties or timing
