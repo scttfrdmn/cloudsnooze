@@ -1,0 +1,187 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudSnooze Test Resource Cleanup Lambda - Automatically cleans up test resources'
+
+Parameters:
+  MaxAgeHours:
+    Type: Number
+    Default: 2
+    Description: Maximum age in hours before resources are cleaned up
+    MinValue: 1
+    MaxValue: 24
+  
+  CleanupSchedule:
+    Type: String
+    Default: rate(1 hour)
+    Description: Schedule expression for how often the cleanup should run
+
+  TagKey:
+    Type: String
+    Default: Purpose
+    Description: Tag key used to identify test resources
+  
+  TagValue:
+    Type: String
+    Default: Testing
+    Description: Tag value used to identify test resources
+
+Resources:
+  CleanupLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: CloudSnoozeTestCleanupPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - ec2:TerminateInstances
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    'ec2:ResourceTag/Purpose': !Ref TagValue
+
+  CleanupLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.lambda_handler
+      Role: !GetAtt CleanupLambdaRole.Arn
+      Runtime: python3.9
+      Timeout: 60
+      MemorySize: 128
+      Environment:
+        Variables:
+          MAX_AGE_HOURS: !Ref MaxAgeHours
+          TAG_KEY: !Ref TagKey
+          TAG_VALUE: !Ref TagValue
+      Code:
+        ZipFile: |
+          import boto3
+          import datetime
+          import logging
+          import os
+
+          # Configure logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          # Set up default values
+          DEFAULT_MAX_AGE_HOURS = 2
+          DEFAULT_TAG_KEY = "Purpose"
+          DEFAULT_TAG_VALUE = "Testing"
+
+          def get_env_var(name, default):
+              """Get an environment variable or return a default value"""
+              return os.environ.get(name, default)
+
+          def lambda_handler(event, context):
+              """
+              Lambda function to clean up test resources in AWS
+              
+              Identifies resources tagged for testing that are older than the specified
+              maximum age and terminates/deletes them.
+              """
+              max_age_hours = int(get_env_var("MAX_AGE_HOURS", DEFAULT_MAX_AGE_HOURS))
+              tag_key = get_env_var("TAG_KEY", DEFAULT_TAG_KEY)
+              tag_value = get_env_var("TAG_VALUE", DEFAULT_TAG_VALUE)
+              
+              max_age_seconds = max_age_hours * 3600
+              current_time = datetime.datetime.now(datetime.timezone.utc)
+              
+              logger.info(f"Starting cleanup of resources tagged {tag_key}={tag_value} older than {max_age_hours} hours")
+              
+              # Initialize results
+              results = {
+                  "terminated_instances": [],
+                  "errors": []
+              }
+              
+              # Clean up EC2 instances
+              try:
+                  ec2 = boto3.resource('ec2')
+                  
+                  # Find all instances with the Testing tag
+                  instances = ec2.instances.filter(
+                      Filters=[
+                          {'Name': f'tag:{tag_key}', 'Values': [tag_value]},
+                          {'Name': 'instance-state-name', 'Values': ['pending', 'running', 'stopping', 'stopped']}
+                      ]
+                  )
+                  
+                  # Terminate instances older than the max age
+                  for instance in instances:
+                      try:
+                          # Get launch time
+                          launch_time = instance.launch_time
+                          age_seconds = (current_time - launch_time).total_seconds()
+                          
+                          if age_seconds > max_age_seconds:
+                              instance_id = instance.id
+                              logger.info(f"Terminating instance {instance_id} - Age: {age_seconds/3600:.2f} hours")
+                              
+                              # Get tags for logging
+                              tags = {tag['Key']: tag['Value'] for tag in instance.tags or []}
+                              logger.info(f"Instance {instance_id} tags: {tags}")
+                              
+                              # Terminate the instance
+                              instance.terminate()
+                              results["terminated_instances"].append(instance_id)
+                              
+                              logger.info(f"Successfully requested termination of instance {instance_id}")
+                          else:
+                              logger.info(f"Skipping instance {instance.id} - Age: {age_seconds/3600:.2f} hours")
+                      except Exception as e:
+                          error_msg = f"Error processing instance {instance.id}: {str(e)}"
+                          logger.error(error_msg)
+                          results["errors"].append(error_msg)
+              
+              except Exception as e:
+                  error_msg = f"Error in EC2 cleanup: {str(e)}"
+                  logger.error(error_msg)
+                  results["errors"].append(error_msg)
+              
+              # Log summary
+              logger.info(f"Cleanup complete. Terminated {len(results['terminated_instances'])} instances. Errors: {len(results['errors'])}")
+              
+              return results
+
+  CleanupSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "Schedule to trigger the CloudSnooze test resource cleanup"
+      ScheduleExpression: !Ref CleanupSchedule
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt CleanupLambda.Arn
+          Id: CleanupScheduleTarget
+
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt CleanupLambda.Arn
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt CleanupSchedule.Arn
+
+Outputs:
+  CleanupLambdaArn:
+    Description: ARN of the cleanup Lambda function
+    Value: !GetAtt CleanupLambda.Arn
+    
+  CleanupLambdaName:
+    Description: Name of the cleanup Lambda function
+    Value: !Ref CleanupLambda
+    
+  CleanupScheduleName:
+    Description: Name of the CloudWatch Events rule for cleanup scheduling
+    Value: !Ref CleanupSchedule
