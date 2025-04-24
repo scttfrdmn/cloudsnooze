@@ -248,4 +248,3 @@ This project is licensed under the Apache License, Version 2.0 - see the [LICENS
 - Thanks to all the contributors who have helped with development
 - Inspired by the need to save cloud costs automatically
 - Built with Go and Electron
-# Test update

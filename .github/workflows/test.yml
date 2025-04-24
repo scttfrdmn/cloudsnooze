@@ -1,4 +1,4 @@
-name: Test
+name: Go Tests
 
 on:
   push:
@@ -7,69 +7,61 @@ on:
     branches: [ main ]
 
 jobs:
-  test:
-    name: Unit Tests
+  build:
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
         go-version: '1.24.x'
 
-    - name: Test daemon
-      run: |
-        cd daemon
-        go mod tidy
-        go get github.com/shirou/gopsutil/v3/cpu github.com/shirou/gopsutil/v3/disk github.com/shirou/gopsutil/v3/mem github.com/shirou/gopsutil/v3/net
-        go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+    - name: Build CLI
+      run: cd cli && go build -v ./...
 
     - name: Test CLI
-      run: |
-        cd cli
-        go mod tidy
-        go get github.com/scttfrdmn/cloudsnooze/daemon/api
-        go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+      run: cd cli && go test -race -coverprofile=coverage.txt -covermode=atomic ./...
 
-    - name: Upload coverage reports
+    - name: Build Daemon
+      run: cd daemon && go build -v ./...
+
+    - name: Test Daemon
+      run: cd daemon && go test -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+    - name: Upload Daemon coverage
       uses: codecov/codecov-action@v4
       with:
-        files: ./daemon/coverage.txt,./cli/coverage.txt
-        flags: unittests
-        name: codecov-cloudsnooze
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: ./daemon/coverage.txt
+        flags: daemon
+        fail_ci_if_error: false
 
-  integration-test:
-    name: Integration Tests
+    - name: Upload CLI coverage
+      uses: codecov/codecov-action@v4
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: ./cli/coverage.txt
+        flags: cli
+        fail_ci_if_error: false
+
+  aws-tests:
     runs-on: ubuntu-latest
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
         go-version: '1.24.x'
 
-    - name: Set up test environment
-      run: |
-        # Mock setup for AWS integration tests would go here
-        echo "Setting up test environment"
-        mkdir -p test_logs
+    - name: Run AWS integration tests
+      run: cd daemon && go test -tags=integration -race -coverprofile=coverage-aws.txt -covermode=atomic ./cloud/aws
 
-    - name: Run integration tests
-      run: |
-        # This is a placeholder for actual integration tests
-        echo "Running integration tests..."
-        echo "All tests passed" > test_logs/integration_results.log
-
-    - name: Upload test logs
-      uses: actions/upload-artifact@v4
+    - name: Upload AWS coverage
+      uses: codecov/codecov-action@v4
       with:
-        name: integration-test-logs
-        path: test_logs/
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: ./daemon/coverage-aws.txt
+        flags: aws-integration
+        fail_ci_if_error: false

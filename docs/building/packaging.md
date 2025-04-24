@@ -56,7 +56,7 @@ The packaging scripts in `/packaging` directory automate the build process:
 
 ### Prerequisites
 
-- Go 1.16 or later
+- Go 1.24 or later
 - Required for DEB: `dpkg-deb`
 - Required for RPM: `rpmbuild`
 

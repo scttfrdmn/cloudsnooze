@@ -78,6 +78,7 @@ The GitHub Actions build and test workflows are failing due to the following iss
 # Set up go.mod in daemon directory
 cd daemon
 go mod init github.com/scttfrdmn/cloudsnooze/daemon
+go mod edit -go=1.24
 go mod tidy
 
 # Add required dependencies

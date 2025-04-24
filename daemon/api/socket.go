@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 const (
@@ -39,6 +40,7 @@ type SocketServer struct {
 	socketPath string
 	handlers   map[string]CommandHandler
 	running    bool
+	mu         sync.RWMutex
 }
 
 // SocketClient is a client for communicating with the socket server
@@ -85,6 +87,7 @@ func NewSocketServer(socketPath string) (*SocketServer, error) {
 		listener:   listener,
 		socketPath: socketPath,
 		handlers:   make(map[string]CommandHandler),
+		mu:         sync.RWMutex{},
 	}, nil
 }
 
@@ -95,11 +98,26 @@ func (s *SocketServer) RegisterHandler(command string, handler CommandHandler) {
 
 // Start starts the socket server
 func (s *SocketServer) Start() error {
+	s.mu.Lock()
 	s.running = true
-	for s.running {
+	s.mu.Unlock()
+
+	for {
+		s.mu.RLock()
+		running := s.running
+		s.mu.RUnlock()
+
+		if !running {
+			return nil
+		}
+
 		conn, err := s.listener.Accept()
 		if err != nil {
-			if !s.running {
+			s.mu.RLock()
+			running = s.running
+			s.mu.RUnlock()
+
+			if !running {
 				return nil
 			}
 			return fmt.Errorf("error accepting connection: %v", err)
@@ -108,12 +126,14 @@ func (s *SocketServer) Start() error {
 		// Handle connection in a goroutine
 		go s.handleConnection(conn)
 	}
-	return nil
 }
 
 // Stop stops the socket server
 func (s *SocketServer) Stop() error {
+	s.mu.Lock()
 	s.running = false
+	s.mu.Unlock()
+
 	if s.listener != nil {
 		return s.listener.Close()
 	}
