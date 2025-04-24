@@ -19,11 +19,31 @@ Before you begin, you need:
 - Administrative access to the GitHub repository
 - AWS CLI and GitHub CLI installed locally
 
+### Setting Up an AWS Profile (Recommended)
+
+When working with a dedicated AWS testing account, it's recommended to set up a separate AWS CLI profile to avoid confusion with your default credentials:
+
+```bash
+# Create a new AWS profile for CloudSnooze testing
+aws configure --profile cloudsnooze-testing
+```
+
+Enter the access key, secret key, and region for your testing account when prompted. For more detailed instructions on AWS profile setup, see the [AWS Profile Setup Guide](aws_profile_setup.md).
+
+All commands in this guide can be run with the `--profile cloudsnooze-testing` flag to ensure you're using the correct AWS account.
+
 ## Step 1: Create an IAM OIDC Provider in AWS
 
 First, create an IAM OIDC identity provider to establish trust with GitHub:
 
 ```bash
+# If using an AWS profile
+aws --profile cloudsnooze-testing iam create-open-id-connect-provider \
+  --url https://token.actions.githubusercontent.com \
+  --client-id-list sts.amazonaws.com \
+  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
+
+# OR, if using default credentials
 aws iam create-open-id-connect-provider \
   --url https://token.actions.githubusercontent.com \
   --client-id-list sts.amazonaws.com \
@@ -96,17 +116,28 @@ aws iam create-open-id-connect-provider \
 3. Create the IAM role:
 
 ```bash
-# Create the role with the trust policy
+# If using an AWS profile
+aws --profile cloudsnooze-testing iam create-role \
+  --role-name CloudSnoozeGitHubActionsRole \
+  --assume-role-policy-document file://trust-policy.json
+
+aws --profile cloudsnooze-testing iam create-policy \
+  --policy-name CloudSnoozeTestPolicy \
+  --policy-document file://permissions-policy.json
+
+aws --profile cloudsnooze-testing iam attach-role-policy \
+  --role-name CloudSnoozeGitHubActionsRole \
+  --policy-arn arn:aws:iam::<ACCOUNT_ID>:policy/CloudSnoozeTestPolicy
+
+# OR, if using default credentials
 aws iam create-role \
   --role-name CloudSnoozeGitHubActionsRole \
   --assume-role-policy-document file://trust-policy.json
 
-# Create the permissions policy
 aws iam create-policy \
   --policy-name CloudSnoozeTestPolicy \
   --policy-document file://permissions-policy.json
 
-# Attach the policy to the role
 aws iam attach-role-policy \
   --role-name CloudSnoozeGitHubActionsRole \
   --policy-arn arn:aws:iam::<ACCOUNT_ID>:policy/CloudSnoozeTestPolicy
@@ -115,6 +146,10 @@ aws iam attach-role-policy \
 4. Get the role ARN:
 
 ```bash
+# If using an AWS profile
+aws --profile cloudsnooze-testing iam get-role --role-name CloudSnoozeGitHubActionsRole --query Role.Arn --output text
+
+# OR, if using default credentials
 aws iam get-role --role-name CloudSnoozeGitHubActionsRole --query Role.Arn --output text
 ```
 
@@ -174,7 +209,14 @@ Create a budget using the AWS Management Console:
 To automatically clean up test resources:
 
 ```bash
-# Deploy the cleanup Lambda using CloudFormation
+# If using an AWS profile
+aws --profile cloudsnooze-testing cloudformation deploy \
+  --template-file scripts/aws_cleanup_lambda.yaml \
+  --stack-name cloudsnooze-test-cleanup \
+  --capabilities CAPABILITY_IAM \
+  --parameter-overrides MaxAgeHours=2 TagKey=Purpose TagValue=Testing
+
+# OR, if using default credentials
 aws cloudformation deploy \
   --template-file scripts/aws_cleanup_lambda.yaml \
   --stack-name cloudsnooze-test-cleanup \
@@ -215,6 +257,24 @@ This Lambda function will run every hour and clean up any test resources tagged 
 3. **Missing Permissions**:
    - Ensure the GitHub Actions workflow has the `id-token: write` permission
    - Verify the IAM role has the correct permissions for EC2 operations
+
+## Using the Setup Script
+
+We provide a script that automates most of the setup process:
+
+```bash
+# Run the setup script with AWS profile
+./scripts/setup_github_oidc.sh --profile cloudsnooze-testing
+
+# OR, run with default credentials
+./scripts/setup_github_oidc.sh
+```
+
+The script will:
+1. Create or update the OIDC provider
+2. Create an IAM role with the correct trust policy
+3. Create and attach the necessary permissions
+4. Add the role ARN to GitHub secrets
 
 ## Local Testing with OIDC Role
 

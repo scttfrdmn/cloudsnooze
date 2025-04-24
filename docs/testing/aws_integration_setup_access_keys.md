@@ -18,12 +18,28 @@ Before you begin, you need:
 - Administrative access to the GitHub repository
 - AWS CLI and GitHub CLI installed locally
 
+### Setting Up an AWS Profile (Recommended)
+
+When working with a dedicated AWS testing account, it's recommended to set up a separate AWS CLI profile to avoid confusion with your default credentials:
+
+```bash
+# Create a new AWS profile for CloudSnooze testing
+aws configure --profile cloudsnooze-testing
+```
+
+Enter the access key, secret key, and region for your testing account when prompted. For more detailed instructions on AWS profile setup, see the [AWS Profile Setup Guide](aws_profile_setup.md).
+
+All commands in this guide can be run with the `--profile cloudsnooze-testing` flag to ensure you're using the correct AWS account.
+
 ## Step 1: Create an IAM User
 
 First, create a dedicated IAM user for GitHub Actions:
 
 ```bash
-# Create IAM user
+# If using an AWS profile
+aws --profile cloudsnooze-testing iam create-user --user-name github-cloudsnooze-test
+
+# OR, if using default credentials
 aws iam create-user --user-name github-cloudsnooze-test
 
 # Create policy document (save as cloudsnooze-test-policy.json)
@@ -61,16 +77,26 @@ cat > cloudsnooze-test-policy.json << EOF
 }
 EOF
 
-# Create the policy
-POLICY_ARN=$(aws iam create-policy \
+# Create the policy (with profile)
+POLICY_ARN=$(aws --profile cloudsnooze-testing iam create-policy \
   --policy-name CloudSnoozeTestPolicy \
   --policy-document file://cloudsnooze-test-policy.json \
   --query 'Policy.Arn' --output text)
 
 # Attach policy to user
-aws iam attach-user-policy \
+aws --profile cloudsnooze-testing iam attach-user-policy \
   --user-name github-cloudsnooze-test \
   --policy-arn $POLICY_ARN
+
+# OR, without profile:
+# POLICY_ARN=$(aws iam create-policy \
+#   --policy-name CloudSnoozeTestPolicy \
+#   --policy-document file://cloudsnooze-test-policy.json \
+#   --query 'Policy.Arn' --output text)
+# 
+# aws iam attach-user-policy \
+#   --user-name github-cloudsnooze-test \
+#   --policy-arn $POLICY_ARN
 ```
 
 ## Step 2: Generate Access Keys
@@ -78,8 +104,11 @@ aws iam attach-user-policy \
 Create access keys for the IAM user:
 
 ```bash
-# Generate access keys
-ACCESS_KEY=$(aws iam create-access-key --user-name github-cloudsnooze-test)
+# Generate access keys (with profile)
+ACCESS_KEY=$(aws --profile cloudsnooze-testing iam create-access-key --user-name github-cloudsnooze-test)
+
+# OR, without profile:
+# ACCESS_KEY=$(aws iam create-access-key --user-name github-cloudsnooze-test)
 
 # Extract access key ID and secret key
 ACCESS_KEY_ID=$(echo $ACCESS_KEY | jq -r '.AccessKey.AccessKeyId')
@@ -111,7 +140,10 @@ Add the access keys to your GitHub repository secrets:
 
 3. **Using the helper script**:
    ```bash
-   cd /Users/scttfrdmn/src/cloudsnooze
+   # Using profile
+   ./scripts/setup_github_secrets.sh --profile cloudsnooze-testing
+   
+   # OR, using default credentials
    ./scripts/setup_github_secrets.sh
    ```
 
@@ -154,12 +186,19 @@ Create a budget using the AWS Management Console:
 To automatically clean up test resources:
 
 ```bash
-# Deploy the cleanup Lambda using CloudFormation
-aws cloudformation deploy \
+# Deploy the cleanup Lambda using CloudFormation (with profile)
+aws --profile cloudsnooze-testing cloudformation deploy \
   --template-file scripts/aws_cleanup_lambda.yaml \
   --stack-name cloudsnooze-test-cleanup \
   --capabilities CAPABILITY_IAM \
   --parameter-overrides MaxAgeHours=2 TagKey=Purpose TagValue=Testing
+
+# OR, without profile:
+# aws cloudformation deploy \
+#   --template-file scripts/aws_cleanup_lambda.yaml \
+#   --stack-name cloudsnooze-test-cleanup \
+#   --capabilities CAPABILITY_IAM \
+#   --parameter-overrides MaxAgeHours=2 TagKey=Purpose TagValue=Testing
 ```
 
 This Lambda function will run every hour and clean up any test resources tagged with `Purpose: Testing` that are older than 2 hours.
@@ -185,19 +224,32 @@ To run the integration tests locally:
 
 1. **Configure AWS credentials**:
    ```bash
+   # Option 1: Set environment variables directly
    export AWS_ACCESS_KEY_ID=your_access_key
    export AWS_SECRET_ACCESS_KEY=your_secret_key
    export AWS_REGION=us-west-2
+   
+   # Option 2: Use an AWS profile (recommended)
+   export AWS_PROFILE=cloudsnooze-testing
    ```
 
 2. **Create a test EC2 instance**:
    ```bash
+   # If using AWS_PROFILE
    INSTANCE_ID=$(aws ec2 run-instances \
      --image-id ami-0c2b8ca1dad447f8a \
      --instance-type t2.micro \
      --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=cloudsnooze-local-test},{Key=Purpose,Value=Testing}]" \
      --query 'Instances[0].InstanceId' \
      --output text)
+
+   # OR, if using an explicit profile
+   # INSTANCE_ID=$(aws --profile cloudsnooze-testing ec2 run-instances \
+   #   --image-id ami-0c2b8ca1dad447f8a \
+   #   --instance-type t2.micro \
+   #   --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=cloudsnooze-local-test},{Key=Purpose,Value=Testing}]" \
+   #   --query 'Instances[0].InstanceId' \
+   #   --output text)
    
    echo "Created test instance: $INSTANCE_ID"
    export CLOUDSNOOZE_TEST_INSTANCE_ID=$INSTANCE_ID
@@ -212,7 +264,11 @@ To run the integration tests locally:
 
 4. **Clean up**:
    ```bash
+   # If using AWS_PROFILE
    aws ec2 terminate-instances --instance-ids $INSTANCE_ID
+   
+   # OR, if using an explicit profile
+   # aws --profile cloudsnooze-testing ec2 terminate-instances --instance-ids $INSTANCE_ID
    ```
 
 ## Best Practices for Access Key Security
@@ -226,8 +282,11 @@ To run the integration tests locally:
    - Rotate access keys periodically (e.g., every 90 days)
    - To rotate keys:
      ```bash
-     # Create new access key
-     NEW_ACCESS_KEY=$(aws iam create-access-key --user-name github-cloudsnooze-test)
+     # Create new access key (with profile)
+     NEW_ACCESS_KEY=$(aws --profile cloudsnooze-testing iam create-access-key --user-name github-cloudsnooze-test)
+     
+     # OR, without profile
+     # NEW_ACCESS_KEY=$(aws iam create-access-key --user-name github-cloudsnooze-test)
      
      # Update GitHub secrets with the new key
      NEW_ACCESS_KEY_ID=$(echo $NEW_ACCESS_KEY | jq -r '.AccessKey.AccessKeyId')
@@ -235,8 +294,11 @@ To run the integration tests locally:
      gh secret set AWS_ACCESS_KEY_ID --body "$NEW_ACCESS_KEY_ID"
      gh secret set AWS_SECRET_ACCESS_KEY --body "$NEW_SECRET_ACCESS_KEY"
      
-     # Delete old access key (after verifying new key works)
-     aws iam delete-access-key --user-name github-cloudsnooze-test --access-key-id OLD_ACCESS_KEY_ID
+     # Delete old access key (with profile)
+     aws --profile cloudsnooze-testing iam delete-access-key --user-name github-cloudsnooze-test --access-key-id OLD_ACCESS_KEY_ID
+     
+     # OR, without profile
+     # aws iam delete-access-key --user-name github-cloudsnooze-test --access-key-id OLD_ACCESS_KEY_ID
      ```
 
 3. **Monitor for key usage**:
